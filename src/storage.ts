@@ -1,59 +1,77 @@
-export type Todo = { id: string; text: string; done: boolean; level: 0 | 1 }
+export type Row = { id: string; text: string; checkbox: boolean; done: boolean }
 
 const STORAGE_KEY = 'todos'
 
-function getCloudStorage(): TelegramCloudStorage | undefined {
-  return window.Telegram?.WebApp?.CloudStorage
+// Compact on-disk shape: short keys, defaults omitted to save characters.
+//   i = id (always)        t = text (omit when "")
+//   c = 1 when checkbox    d = 1 when done
+type StoredRow = { i: string; t?: string; c?: 1; d?: 1 }
+
+// Convert in-memory rows to the tight JSON string that actually gets stored.
+export function serialize(rows: Row[]): string {
+  const compact: StoredRow[] = rows.map((row) => {
+    const out: StoredRow = { i: row.id }
+    if (row.text !== '') out.t = row.text
+    if (row.checkbox) out.c = 1
+    if (row.done) out.d = 1
+    return out
+  })
+  return JSON.stringify(compact)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function parseTodos(raw: string | null): Todo[] {
+// Parse the stored string back into full rows, restoring omitted defaults.
+export function deserialize(raw: string | null): Row[] {
   if (!raw) return []
   try {
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    const result: Todo[] = []
+    const rows: Row[] = []
     for (const item of parsed) {
       if (!isRecord(item)) continue
-      if (typeof item.id !== 'string') continue
-      if (typeof item.text !== 'string') continue
-      if (typeof item.done !== 'boolean') continue
-      // Migration: previously saved lists have no `level` — default to 0.
-      const level: 0 | 1 = item.level === 1 ? 1 : 0
-      result.push({ id: item.id, text: item.text, done: item.done, level })
+      if (typeof item.i !== 'string') continue
+      const text = typeof item.t === 'string' ? item.t : ''
+      const checkbox = item.c === 1
+      // `done` only applies to checkbox rows.
+      const done = checkbox && item.d === 1
+      rows.push({ id: item.i, text, checkbox, done })
     }
-    return result
+    return rows
   } catch {
     return []
   }
 }
 
-export function loadTodos(): Promise<Todo[]> {
+function getCloudStorage(): TelegramCloudStorage | undefined {
+  return window.Telegram?.WebApp?.CloudStorage
+}
+
+export function loadRows(): Promise<Row[]> {
   const cloud = getCloudStorage()
   if (cloud) {
-    return new Promise<Todo[]>((resolve) => {
+    return new Promise<Row[]>((resolve) => {
       cloud.getItem(STORAGE_KEY, (error, value) => {
         if (error) {
           resolve([])
           return
         }
-        resolve(parseTodos(value))
+        resolve(deserialize(value))
       })
     })
   }
 
   try {
-    return Promise.resolve(parseTodos(localStorage.getItem(STORAGE_KEY)))
+    return Promise.resolve(deserialize(localStorage.getItem(STORAGE_KEY)))
   } catch {
     return Promise.resolve([])
   }
 }
 
-export function saveTodos(todos: Todo[]): Promise<void> {
-  const value = JSON.stringify(todos)
+export function saveRows(rows: Row[]): Promise<void> {
+  const value = serialize(rows)
   const cloud = getCloudStorage()
   if (cloud) {
     return new Promise<void>((resolve) => {

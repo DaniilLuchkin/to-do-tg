@@ -23,7 +23,8 @@ body {
 .app {
   max-width: 560px;
   margin: 0 auto;
-  padding: 24px 20px;
+  /* Extra bottom padding so the list clears the fixed toolbar. */
+  padding: 24px 20px 72px;
 }
 
 .list {
@@ -37,12 +38,6 @@ body {
   align-items: flex-start;
   gap: 12px;
   padding: 6px 0;
-  /* Keep native vertical scrolling; horizontal swipes are handled in JS. */
-  touch-action: pan-y;
-}
-
-.row.sub {
-  padding-left: 24px;
 }
 
 .checkbox {
@@ -105,4 +100,34 @@ body {
   color: var(--hint);
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* Quiet, persistently-visible control fixed at the bottom of the column. */
+.toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  background: var(--bg);
+  pointer-events: none;
+}
+
+.add-checkbox {
+  pointer-events: auto;
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  color: var(--hint);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.add-checkbox:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
