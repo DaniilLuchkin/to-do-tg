@@ -5,24 +5,29 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { loadTodos, saveTodos, type Todo } from './storage'
+import { loadRows, saveRows, serialize, type Row } from './storage'
 
 // Telegram CloudStorage allows at most 4096 characters per value. We store the
-// whole list as one JSON string under the key "todos", so the binding limit is
-// the serialized length of the array.
+// whole list as one (compact) JSON string under "todos", so the binding limit
+// is the serialized length of that string.
 const MAX_VALUE_LENGTH = 4096
 
-// Horizontal travel (px) a swipe must exceed to commit an indent/outdent.
-const SWIPE_COMMIT_PX = 48
-
-function serialized(todos: Todo[]): number {
-  return JSON.stringify(todos).length
+function tooLong(rows: Row[]): boolean {
+  return serialize(rows).length > MAX_VALUE_LENGTH
 }
 
-function createTodo(level: 0 | 1 = 0): Todo {
-  return { id: crypto.randomUUID(), text: '', done: false, level }
+// Short, collision-resistant ids to keep the saved JSON small. A truncated
+// base36 timestamp plus a per-session counter suffix (~7 chars).
+let idCounter = 0
+function newId(): string {
+  const time = Date.now().toString(36).slice(-5)
+  const seq = (idCounter++ % 1296).toString(36).padStart(2, '0')
+  return time + seq
+}
+
+function createRow(checkbox = false): Row {
+  return { id: newId(), text: '', checkbox, done: false }
 }
 
 // Reset a textarea to a single line then grow it to fit its content.
@@ -31,49 +36,30 @@ function autoGrow(el: HTMLTextAreaElement): void {
   el.style.height = `${el.scrollHeight}px`
 }
 
-// Light haptic tick on a committed indent/outdent — only inside Telegram.
-function hapticLight(): void {
-  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light')
-}
-
-// Active swipe gesture state for a single pointer.
-type Gesture = {
-  pointerId: number
-  rowId: string
-  startX: number
-  startY: number
-  // 'pending' until the first decisive move locks the axis.
-  mode: 'pending' | 'horizontal' | 'vertical'
-}
-
 export default function App() {
-  const [todos, setTodos] = useState<Todo[]>([])
+  const [rows, setRows] = useState<Row[]>([])
   const [loaded, setLoaded] = useState(false)
   const [limitReached, setLimitReached] = useState(false)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
 
-  // Always-current mirror of `todos`, so event handlers can read the latest
-  // committed state synchronously when computing candidate next states.
-  const todosRef = useRef<Todo[]>(todos)
-  todosRef.current = todos
+  // Always-current mirrors, so event handlers can read the latest committed
+  // state synchronously when computing candidate next states.
+  const rowsRef = useRef<Row[]>(rows)
+  rowsRef.current = rows
+  const focusedIdRef = useRef<string | null>(null)
 
-  // Map of Todo id -> textarea element, so we can move focus imperatively.
+  // Map of Row id -> textarea element, so we can move focus imperatively.
   const inputs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
   // The id of the textarea that should receive focus after the next render,
   // and whether the caret should be placed at the end.
   const pendingFocus = useRef<{ id: string; caretEnd: boolean } | null>(null)
 
-  // Map of Todo id -> row wrapper element, used for swipe transforms and
-  // pointer capture.
-  const rows = useRef<Map<string, HTMLLIElement>>(new Map())
-  // The in-flight swipe gesture, if any.
-  const gesture = useRef<Gesture | null>(null)
-
   // Initial load. Always guarantee at least one row to type into.
   useEffect(() => {
     let active = true
-    loadTodos().then((stored) => {
+    loadRows().then((stored) => {
       if (!active) return
-      setTodos(stored.length > 0 ? stored : [createTodo()])
+      setRows(stored.length > 0 ? stored : [createRow()])
       setLoaded(true)
     })
     return () => {
@@ -86,10 +72,10 @@ export default function App() {
   useEffect(() => {
     if (!loaded) return
     const handle = window.setTimeout(() => {
-      void saveTodos(todos)
+      void saveRows(rows)
     }, 400)
     return () => window.clearTimeout(handle)
-  }, [todos, loaded])
+  }, [rows, loaded])
 
   // Apply any pending focus request once the DOM reflects the new list.
   useEffect(() => {
@@ -103,12 +89,12 @@ export default function App() {
       const end = el.value.length
       el.setSelectionRange(end, end)
     }
-  }, [todos])
+  }, [rows])
 
   // Keep every textarea sized to its content after any state change.
   useEffect(() => {
     inputs.current.forEach((el) => autoGrow(el))
-  }, [todos, limitReached])
+  }, [rows, limitReached])
 
   const registerInput = useCallback(
     (id: string) => (el: HTMLTextAreaElement | null) => {
@@ -122,265 +108,182 @@ export default function App() {
     []
   )
 
+  const handleFocus = useCallback((id: string) => {
+    focusedIdRef.current = id
+    setFocusedId(id)
+  }, [])
+
+  const handleBlur = useCallback((id: string) => {
+    if (focusedIdRef.current === id) {
+      focusedIdRef.current = null
+      setFocusedId(null)
+    }
+  }, [])
+
   // Editing a row's text. Growing past the limit is rejected: the textarea is
   // reverted in place and the notice is shown. Anything else is applied.
   const handleChange = useCallback(
     (id: string, event: ChangeEvent<HTMLTextAreaElement>) => {
       const value = event.target.value
-      const base = todosRef.current
-      const candidate = base.map((todo) =>
-        todo.id === id ? { ...todo, text: value } : todo
+      const base = rowsRef.current
+      const candidate = base.map((row) =>
+        row.id === id ? { ...row, text: value } : row
       )
-      if (serialized(candidate) > MAX_VALUE_LENGTH) {
-        const current = base.find((todo) => todo.id === id)
+      if (tooLong(candidate)) {
+        const current = base.find((row) => row.id === id)
         event.target.value = current ? current.text : ''
         autoGrow(event.target)
         setLimitReached(true)
         return
       }
       setLimitReached(false)
-      setTodos(candidate)
+      setRows(candidate)
       autoGrow(event.target)
     },
     []
   )
 
-  // Toggling done never needs gating — it must always be allowed so the user
-  // can keep managing the list even at the cap.
+  // Clicking the checkbox toggles done (checkbox rows only). Always allowed so
+  // the user can keep managing the list even near the cap.
   const toggleDone = useCallback((id: string) => {
     setLimitReached(false)
-    setTodos((prev) =>
-      prev.map((todo) =>
-        todo.id === id ? { ...todo, done: !todo.done } : todo
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id ? { ...row, done: !row.done } : row
       )
     )
   }, [])
 
-  // Indent/outdent change only `level`, which never grows the serialized JSON
-  // past the cap, so they are always allowed (even when limitReached).
-  const indentRow = useCallback((id: string) => {
-    const base = todosRef.current
-    const row = base.find((todo) => todo.id === id)
-    if (!row || row.level === 1) return
+  // The bottom control: give the currently focused row a checkbox (text and
+  // caret preserved). Only ever turns the checkbox on.
+  const addCheckboxToFocused = useCallback(() => {
+    const id = focusedIdRef.current
+    if (!id) return
+    const base = rowsRef.current
+    const row = base.find((r) => r.id === id)
+    if (!row || row.checkbox) return
+    const candidate = base.map((r) =>
+      r.id === id ? { ...r, checkbox: true } : r
+    )
+    if (tooLong(candidate)) {
+      setLimitReached(true)
+      return
+    }
     setLimitReached(false)
-    setTodos(base.map((todo) => (todo.id === id ? { ...todo, level: 1 } : todo)))
-    hapticLight()
-  }, [])
-
-  const outdentRow = useCallback((id: string) => {
-    const base = todosRef.current
-    const row = base.find((todo) => todo.id === id)
-    if (!row || row.level === 0) return
-    setLimitReached(false)
-    setTodos(base.map((todo) => (todo.id === id ? { ...todo, level: 0 } : todo)))
-    hapticLight()
+    setRows(candidate)
+    inputs.current.get(id)?.focus()
   }, [])
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>, id: string) => {
-      const base = todosRef.current
-      const index = base.findIndex((todo) => todo.id === id)
+      const base = rowsRef.current
+      const index = base.findIndex((row) => row.id === id)
       if (index === -1) return
 
-      // Enter (without Shift) inserts a new empty row after this one. The new
-      // row inherits the current row's indent level. Shift+Enter falls through
-      // to the textarea's default newline (gated via handleChange).
+      // Enter (without Shift) inserts a new row after this one, inheriting its
+      // type. Shift+Enter falls through to a newline (gated via handleChange).
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
-        const next = createTodo(base[index].level)
+        const next = createRow(base[index].checkbox)
         const candidate = base.slice()
         candidate.splice(index + 1, 0, next)
-        if (serialized(candidate) > MAX_VALUE_LENGTH) {
+        if (tooLong(candidate)) {
           setLimitReached(true)
           return
         }
         setLimitReached(false)
-        setTodos(candidate)
+        setRows(candidate)
         pendingFocus.current = { id: next.id, caretEnd: false }
         return
       }
 
-      // Tab indents the row one level (0 -> 1). Shift+Tab outdents (1 -> 0).
-      if (event.key === 'Tab') {
-        event.preventDefault()
-        if (event.shiftKey) outdentRow(id)
-        else indentRow(id)
-        return
-      }
+      if (event.key === 'Backspace') {
+        const el = event.currentTarget
 
-      // Backspace on an empty row deletes it and moves focus to the previous
-      // row. The last remaining row is never deleted.
-      if (event.key === 'Backspace' && event.currentTarget.value === '') {
-        event.preventDefault()
-        if (base.length <= 1) return
-        if (index <= 0) return
-        pendingFocus.current = { id: base[index - 1].id, caretEnd: true }
-        setLimitReached(false)
-        setTodos(base.filter((todo) => todo.id !== id))
-      }
-    },
-    [indentRow, outdentRow]
-  )
-
-  // Reset a row's swipe transform, animating back to rest.
-  const resetRowTransform = useCallback((rowId: string) => {
-    const el = rows.current.get(rowId)
-    if (!el) return
-    el.style.transition = 'transform 120ms ease'
-    el.style.transform = 'translateX(0)'
-  }, [])
-
-  const registerRow = useCallback(
-    (id: string) => (el: HTMLLIElement | null) => {
-      if (el) rows.current.set(id, el)
-      else rows.current.delete(id)
-    },
-    []
-  )
-
-  const handlePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>, id: string) => {
-      // Let the checkbox handle its own taps; never start a swipe there.
-      if (event.target instanceof Element && event.target.closest('.checkbox')) {
-        return
-      }
-      gesture.current = {
-        pointerId: event.pointerId,
-        rowId: id,
-        startX: event.clientX,
-        startY: event.clientY,
-        mode: 'pending',
-      }
-    },
-    []
-  )
-
-  const handlePointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const g = gesture.current
-      if (!g || g.pointerId !== event.pointerId) return
-      const dx = event.clientX - g.startX
-      const dy = event.clientY - g.startY
-
-      // Decide the gesture axis once.
-      if (g.mode === 'pending') {
-        if (Math.abs(dy) > Math.abs(dx)) {
-          // Vertical: hand off to native scrolling and stop tracking.
-          g.mode = 'vertical'
+        // Empty row → delete it entirely and focus the previous row. The last
+        // remaining row is never deleted.
+        if (el.value === '') {
+          event.preventDefault()
+          if (base.length <= 1) return
+          if (index <= 0) return
+          pendingFocus.current = { id: base[index - 1].id, caretEnd: true }
+          setLimitReached(false)
+          setRows(base.filter((row) => row.id !== id))
           return
         }
-        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
-          g.mode = 'horizontal'
-          const el = rows.current.get(g.rowId)
-          if (el) {
-            el.style.transition = ''
-            try {
-              el.setPointerCapture(event.pointerId)
-            } catch {
-              // Capture can fail if the pointer already ended; ignore.
-            }
-          }
-        } else {
+
+        // Caret at the very start of a non-empty checkbox row → remove the
+        // checkbox (keep the text), per "delete the checkbox like text".
+        const atStart = el.selectionStart === 0 && el.selectionEnd === 0
+        if (atStart && base[index].checkbox) {
+          event.preventDefault()
+          setLimitReached(false)
+          setRows(
+            base.map((row) =>
+              row.id === id ? { ...row, checkbox: false, done: false } : row
+            )
+          )
           return
         }
-      }
-
-      if (g.mode === 'horizontal') {
-        // Stop caret placement / text selection while dragging horizontally.
-        event.preventDefault()
-        const el = rows.current.get(g.rowId)
-        if (el) {
-          const damped = Math.max(-56, Math.min(56, dx * 0.4))
-          el.style.transform = `translateX(${damped}px)`
-        }
+        // Otherwise: a normal character delete — let the default happen.
       }
     },
     []
-  )
-
-  const handlePointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const g = gesture.current
-      if (!g || g.pointerId !== event.pointerId) return
-      gesture.current = null
-
-      const el = rows.current.get(g.rowId)
-      if (el) {
-        try {
-          el.releasePointerCapture(event.pointerId)
-        } catch {
-          // Already released; ignore.
-        }
-      }
-      resetRowTransform(g.rowId)
-
-      if (g.mode === 'horizontal') {
-        const dx = event.clientX - g.startX
-        if (dx > SWIPE_COMMIT_PX) indentRow(g.rowId)
-        else if (dx < -SWIPE_COMMIT_PX) outdentRow(g.rowId)
-      }
-    },
-    [indentRow, outdentRow, resetRowTransform]
-  )
-
-  const handlePointerCancel = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const g = gesture.current
-      if (!g || g.pointerId !== event.pointerId) return
-      gesture.current = null
-
-      const el = rows.current.get(g.rowId)
-      if (el) {
-        try {
-          el.releasePointerCapture(event.pointerId)
-        } catch {
-          // Already released; ignore.
-        }
-      }
-      resetRowTransform(g.rowId)
-    },
-    [resetRowTransform]
   )
 
   return (
     <main className="app">
       <ul className="list">
-        {todos.map((todo) => (
-          <li
-            className={`row${todo.level === 1 ? ' sub' : ''}`}
-            key={todo.id}
-            ref={registerRow(todo.id)}
-            onPointerDown={(event) => handlePointerDown(event, todo.id)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
-          >
-            <button
-              type="button"
-              className={`checkbox${todo.done ? ' checked' : ''}`}
-              aria-pressed={todo.done}
-              aria-label={todo.done ? 'Mark as not done' : 'Mark as done'}
-              onClick={() => toggleDone(todo.id)}
-            >
-              {todo.done ? '✓' : ''}
-            </button>
+        {rows.map((row) => (
+          <li className="row" key={row.id}>
+            {row.checkbox && (
+              <button
+                key="checkbox"
+                type="button"
+                className={`checkbox${row.done ? ' checked' : ''}`}
+                aria-pressed={row.done}
+                aria-label={row.done ? 'Mark as not done' : 'Mark as done'}
+                onClick={() => toggleDone(row.id)}
+              >
+                {row.done ? '✓' : ''}
+              </button>
+            )}
             <textarea
-              ref={registerInput(todo.id)}
-              className={`text${todo.done ? ' done' : ''}`}
+              key="text"
+              ref={registerInput(row.id)}
+              className={`text${row.checkbox && row.done ? ' done' : ''}`}
               rows={1}
-              value={todo.text}
+              value={row.text}
               placeholder="New task"
-              onChange={(event) => handleChange(todo.id, event)}
-              onKeyDown={(event) => handleKeyDown(event, todo.id)}
+              onChange={(event) => handleChange(row.id, event)}
+              onKeyDown={(event) => handleKeyDown(event, row.id)}
+              onFocus={() => handleFocus(row.id)}
+              onBlur={() => handleBlur(row.id)}
             />
           </li>
         ))}
       </ul>
+
       {limitReached && (
         <p className="notice">
           Storage limit reached — delete or shorten a task to continue.
         </p>
       )}
+
+      <div className="toolbar">
+        <button
+          type="button"
+          className="add-checkbox"
+          aria-label="Give the current line a checkbox"
+          disabled={focusedId === null}
+          // Keep the textarea focused (and its caret) when pressing this.
+          onPointerDown={(event) => event.preventDefault()}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={addCheckboxToFocused}
+        >
+          ☑ checkbox
+        </button>
+      </div>
     </main>
   )
 }

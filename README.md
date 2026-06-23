@@ -6,12 +6,14 @@ TypeScript + Vite and plain CSS.
 
 ## Interaction
 
-- One vertical list of rows: a checkbox on the left, a borderless text field on the right. Long text wraps onto new lines and the field grows to fit.
-- **Enter** inserts a new empty task right after the current row and focuses it (the new row keeps the current row's indent).
-- **Backspace** on an empty row deletes it and moves the caret to the end of the previous row (the last remaining row is never deleted).
-- Subtasks (one level only): on desktop, **Tab** indents a row and **Shift+Tab** outdents it; on mobile, **swipe a task right** to indent and **left** to outdent.
-- Clicking the checkbox toggles done; done tasks stay in the list, shown with a line-through, and remain editable.
-- The whole list is stored as one value, capped at 4096 characters (Telegram CloudStorage's per-value limit). When the cap is reached, edits that would grow it are blocked and a subtle notice appears until you delete or shorten a task.
+- One vertical list of borderless text lines. Long text wraps onto new lines and each field grows to fit.
+- Lines are **plain text by default** — no checkbox, just a note.
+- Press the **☑ checkbox** control at the bottom to give the currently focused line a checkbox. It keeps your text and only ever turns the checkbox on.
+- **Backspace at the very start** of a checkbox line removes the checkbox again (keeping the text) — delete the checkbox like you'd delete a character.
+- Clicking a checkbox toggles done; done lines stay in the list, shown with a line-through, and remain editable.
+- **Enter** inserts a new line right after the current one and focuses it; the new line keeps the same type (plain stays plain, checkbox stays checkbox).
+- **Backspace on an empty line** deletes it and moves the caret to the end of the previous line (the last remaining line is never deleted).
+- The whole list is stored as one compact value, capped at 4096 characters (Telegram CloudStorage's per-value limit). When the cap is reached, edits that would grow it are blocked and a subtle notice appears until you delete or shorten a line.
 
 ## Develop & build
 
