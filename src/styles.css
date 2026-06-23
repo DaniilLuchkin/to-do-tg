@@ -119,10 +119,11 @@ body {
   pointer-events: auto;
   background: transparent;
   border: none;
-  padding: 4px 8px;
+  padding: 6px 10px;
   color: var(--hint);
   font-family: inherit;
-  font-size: 13px;
+  /* Large enough to read and tap as an emoji. */
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
 }

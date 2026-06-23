@@ -199,9 +199,25 @@ export default function App() {
 
       if (event.key === 'Backspace') {
         const el = event.currentTarget
+        // "Caret at start" means a collapsed caret at position 0.
+        const atStart = el.selectionStart === 0 && el.selectionEnd === 0
+        if (!atStart) return // normal character delete — let the default happen
 
-        // Empty row → delete it entirely and focus the previous row. The last
-        // remaining row is never deleted.
+        // 1. Checkbox row → remove the checkbox first (keep text, caret stays
+        //    at 0). Applies whether the text is empty or not.
+        if (base[index].checkbox) {
+          event.preventDefault()
+          setLimitReached(false)
+          setRows(
+            base.map((row) =>
+              row.id === id ? { ...row, checkbox: false, done: false } : row
+            )
+          )
+          return
+        }
+
+        // 2. Plain empty row → delete it and move focus to the end of the
+        //    previous row. The last remaining row is never deleted.
         if (el.value === '') {
           event.preventDefault()
           if (base.length <= 1) return
@@ -212,20 +228,8 @@ export default function App() {
           return
         }
 
-        // Caret at the very start of a non-empty checkbox row → remove the
-        // checkbox (keep the text), per "delete the checkbox like text".
-        const atStart = el.selectionStart === 0 && el.selectionEnd === 0
-        if (atStart && base[index].checkbox) {
-          event.preventDefault()
-          setLimitReached(false)
-          setRows(
-            base.map((row) =>
-              row.id === id ? { ...row, checkbox: false, done: false } : row
-            )
-          )
-          return
-        }
-        // Otherwise: a normal character delete — let the default happen.
+        // 3. Plain, non-empty row at start → let the default Backspace happen
+        //    (deletes nothing at position 0).
       }
     },
     []
@@ -274,14 +278,14 @@ export default function App() {
         <button
           type="button"
           className="add-checkbox"
-          aria-label="Give the current line a checkbox"
+          aria-label="Add checkbox to current line"
           disabled={focusedId === null}
           // Keep the textarea focused (and its caret) when pressing this.
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={addCheckboxToFocused}
         >
-          ☑ checkbox
+          ✅
         </button>
       </div>
     </main>

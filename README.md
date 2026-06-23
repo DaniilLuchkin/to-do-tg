@@ -8,11 +8,10 @@ TypeScript + Vite and plain CSS.
 
 - One vertical list of borderless text lines. Long text wraps onto new lines and each field grows to fit.
 - Lines are **plain text by default** — no checkbox, just a note.
-- Press the **☑ checkbox** control at the bottom to give the currently focused line a checkbox. It keeps your text and only ever turns the checkbox on.
-- **Backspace at the very start** of a checkbox line removes the checkbox again (keeping the text) — delete the checkbox like you'd delete a character.
+- Press the **✅ control** at the bottom to give the currently focused line a checkbox. It keeps your text and only ever turns the checkbox on.
 - Clicking a checkbox toggles done; done lines stay in the list, shown with a line-through, and remain editable.
 - **Enter** inserts a new line right after the current one and focuses it; the new line keeps the same type (plain stays plain, checkbox stays checkbox).
-- **Backspace on an empty line** deletes it and moves the caret to the end of the previous line (the last remaining line is never deleted).
+- **Backspace at the start of a line:** on a checkbox line it removes the checkbox (keeping the text); on an empty plain line it deletes the line and moves the caret to the end of the previous line (the last remaining line is never deleted). So Backspace on an empty checkbox line removes the checkbox first, then a second Backspace deletes the line.
 - The whole list is stored as one compact value, capped at 4096 characters (Telegram CloudStorage's per-value limit). When the cap is reached, edits that would grow it are blocked and a subtle notice appears until you delete or shorten a line.
 
 ## Develop & build
