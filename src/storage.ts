@@ -1,11 +1,17 @@
-export type Row = { id: string; text: string; checkbox: boolean; done: boolean }
+export type Row = {
+  id: string
+  text: string
+  checkbox: boolean
+  done: boolean
+  level: 0 | 1
+}
 
 const STORAGE_KEY = 'todos'
 
 // Compact on-disk shape: short keys, defaults omitted to save characters.
 //   i = id (always)        t = text (omit when "")
-//   c = 1 when checkbox    d = 1 when done
-type StoredRow = { i: string; t?: string; c?: 1; d?: 1 }
+//   c = 1 when checkbox    d = 1 when done       l = 1 when level === 1
+type StoredRow = { i: string; t?: string; c?: 1; d?: 1; l?: 1 }
 
 // Convert in-memory rows to the tight JSON string that actually gets stored.
 export function serialize(rows: Row[]): string {
@@ -14,6 +20,7 @@ export function serialize(rows: Row[]): string {
     if (row.text !== '') out.t = row.text
     if (row.checkbox) out.c = 1
     if (row.done) out.d = 1
+    if (row.level === 1) out.l = 1
     return out
   })
   return JSON.stringify(compact)
@@ -37,7 +44,8 @@ export function deserialize(raw: string | null): Row[] {
       const checkbox = item.c === 1
       // `done` only applies to checkbox rows.
       const done = checkbox && item.d === 1
-      rows.push({ id: item.i, text, checkbox, done })
+      const level: 0 | 1 = item.l === 1 ? 1 : 0
+      rows.push({ id: item.i, text, checkbox, done, level })
     }
     return rows
   } catch {
