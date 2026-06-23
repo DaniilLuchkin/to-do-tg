@@ -23,8 +23,8 @@ body {
 .app {
   max-width: 560px;
   margin: 0 auto;
-  /* Extra bottom padding so the list clears the fixed toolbar. */
-  padding: 24px 20px 72px;
+  /* Extra bottom padding so the list clears the fixed bottom-right button. */
+  padding: 24px 20px 88px;
 }
 
 .list {
@@ -38,6 +38,12 @@ body {
   align-items: flex-start;
   gap: 12px;
   padding: 6px 0;
+  /* Keep native vertical scrolling; horizontal swipes are handled in JS. */
+  touch-action: pan-y;
+}
+
+.row.sub {
+  padding-left: 24px;
 }
 
 .checkbox {
@@ -102,33 +108,48 @@ body {
   line-height: 1.5;
 }
 
-/* Quiet, persistently-visible control fixed at the bottom of the column. */
+/* Fixed bottom-right cluster: remaining-characters counter + add button. */
 .toolbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  right: 16px;
+  bottom: 16px;
   display: flex;
-  justify-content: center;
-  padding: 12px;
-  background: var(--bg);
+  align-items: center;
+  gap: 10px;
   pointer-events: none;
 }
 
-.add-checkbox {
+.counter {
   pointer-events: auto;
-  background: transparent;
-  border: none;
-  padding: 6px 10px;
   color: var(--hint);
-  font-family: inherit;
-  /* Large enough to read and tap as an emoji. */
-  font-size: 20px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Low remaining count: emphasize, still monochrome (no red). */
+.counter.low {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.fab {
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  /* Neutral grey fill that reads on both light and dark themes. */
+  background: rgba(127, 127, 127, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
 }
 
-.add-checkbox:disabled {
+.fab:disabled {
   opacity: 0.4;
   cursor: default;
 }

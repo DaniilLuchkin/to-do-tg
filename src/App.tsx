@@ -5,6 +5,7 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { loadRows, saveRows, serialize, type Row } from './storage'
 
@@ -12,6 +13,9 @@ import { loadRows, saveRows, serialize, type Row } from './storage'
 // whole list as one (compact) JSON string under "todos", so the binding limit
 // is the serialized length of that string.
 const MAX_VALUE_LENGTH = 4096
+
+// Horizontal travel (px) a swipe must exceed to commit an indent/outdent.
+const SWIPE_COMMIT_PX = 48
 
 function tooLong(rows: Row[]): boolean {
   return serialize(rows).length > MAX_VALUE_LENGTH
@@ -26,14 +30,28 @@ function newId(): string {
   return time + seq
 }
 
-function createRow(checkbox = false): Row {
-  return { id: newId(), text: '', checkbox, done: false }
+function createRow(checkbox = false, level: 0 | 1 = 0): Row {
+  return { id: newId(), text: '', checkbox, done: false, level }
 }
 
 // Reset a textarea to a single line then grow it to fit its content.
 function autoGrow(el: HTMLTextAreaElement): void {
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
+}
+
+// Light haptic tick on a committed indent/outdent — only inside Telegram.
+function hapticLight(): void {
+  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light')
+}
+
+// Active swipe gesture state for a single pointer.
+type Gesture = {
+  pointerId: number
+  rowId: string
+  startX: number
+  startY: number
+  mode: 'pending' | 'horizontal' | 'vertical'
 }
 
 export default function App() {
@@ -50,9 +68,16 @@ export default function App() {
 
   // Map of Row id -> textarea element, so we can move focus imperatively.
   const inputs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
+  // Map of Row id -> row wrapper element, for swipe transforms / pointer capture.
+  const rowEls = useRef<Map<string, HTMLLIElement>>(new Map())
+  // The in-flight swipe gesture, if any.
+  const gesture = useRef<Gesture | null>(null)
   // The id of the textarea that should receive focus after the next render,
   // and whether the caret should be placed at the end.
   const pendingFocus = useRef<{ id: string; caretEnd: boolean } | null>(null)
+
+  // Characters remaining before the storage cap (never shown below 0).
+  const remaining = Math.max(0, MAX_VALUE_LENGTH - serialize(rows).length)
 
   // Initial load. Always guarantee at least one row to type into.
   useEffect(() => {
@@ -108,6 +133,14 @@ export default function App() {
     []
   )
 
+  const registerRow = useCallback(
+    (id: string) => (el: HTMLLIElement | null) => {
+      if (el) rowEls.current.set(id, el)
+      else rowEls.current.delete(id)
+    },
+    []
+  )
+
   const handleFocus = useCallback((id: string) => {
     focusedIdRef.current = id
     setFocusedId(id)
@@ -154,8 +187,28 @@ export default function App() {
     )
   }, [])
 
-  // The bottom control: give the currently focused row a checkbox (text and
-  // caret preserved). Only ever turns the checkbox on.
+  // Indent/outdent only flip `level`, which never grows the serialized string
+  // meaningfully, so they are always allowed (even when limitReached).
+  const indentRow = useCallback((id: string) => {
+    const base = rowsRef.current
+    const row = base.find((r) => r.id === id)
+    if (!row || row.level === 1) return
+    setLimitReached(false)
+    setRows(base.map((r) => (r.id === id ? { ...r, level: 1 } : r)))
+    hapticLight()
+  }, [])
+
+  const outdentRow = useCallback((id: string) => {
+    const base = rowsRef.current
+    const row = base.find((r) => r.id === id)
+    if (!row || row.level === 0) return
+    setLimitReached(false)
+    setRows(base.map((r) => (r.id === id ? { ...r, level: 0 } : r)))
+    hapticLight()
+  }, [])
+
+  // The bottom-right control: give the currently focused row a checkbox (text
+  // and caret preserved). Only ever turns the checkbox on.
   const addCheckboxToFocused = useCallback(() => {
     const id = focusedIdRef.current
     if (!id) return
@@ -181,10 +234,10 @@ export default function App() {
       if (index === -1) return
 
       // Enter (without Shift) inserts a new row after this one, inheriting its
-      // type. Shift+Enter falls through to a newline (gated via handleChange).
+      // type and indent. Shift+Enter falls through to a newline.
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
-        const next = createRow(base[index].checkbox)
+        const next = createRow(base[index].checkbox, base[index].level)
         const candidate = base.slice()
         candidate.splice(index + 1, 0, next)
         if (tooLong(candidate)) {
@@ -235,11 +288,131 @@ export default function App() {
     []
   )
 
+  // Snap a row's swipe transform back to rest with a short animation.
+  const resetRowTransform = useCallback((rowId: string) => {
+    const el = rowEls.current.get(rowId)
+    if (!el) return
+    el.style.transition = 'transform 120ms ease'
+    el.style.transform = 'translateX(0)'
+  }, [])
+
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLLIElement>, id: string) => {
+      // Let the checkbox handle its own taps; never start a swipe there.
+      if (event.target instanceof Element && event.target.closest('.checkbox')) {
+        return
+      }
+      gesture.current = {
+        pointerId: event.pointerId,
+        rowId: id,
+        startX: event.clientX,
+        startY: event.clientY,
+        mode: 'pending',
+      }
+    },
+    []
+  )
+
+  const handlePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLLIElement>) => {
+      const g = gesture.current
+      if (!g || g.pointerId !== event.pointerId) return
+      const dx = event.clientX - g.startX
+      const dy = event.clientY - g.startY
+
+      // Decide the gesture axis once.
+      if (g.mode === 'pending') {
+        if (Math.abs(dy) > Math.abs(dx)) {
+          // Vertical: hand off to native scrolling and stop tracking.
+          g.mode = 'vertical'
+          return
+        }
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
+          g.mode = 'horizontal'
+          const el = rowEls.current.get(g.rowId)
+          if (el) {
+            el.style.transition = ''
+            try {
+              el.setPointerCapture(event.pointerId)
+            } catch {
+              // Capture can fail if the pointer already ended; ignore.
+            }
+          }
+        } else {
+          return
+        }
+      }
+
+      if (g.mode === 'horizontal') {
+        // Stop caret placement / text selection while dragging horizontally.
+        event.preventDefault()
+        const el = rowEls.current.get(g.rowId)
+        if (el) {
+          const damped = Math.max(-56, Math.min(56, dx * 0.4))
+          el.style.transform = `translateX(${damped}px)`
+        }
+      }
+    },
+    []
+  )
+
+  const handlePointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLLIElement>) => {
+      const g = gesture.current
+      if (!g || g.pointerId !== event.pointerId) return
+      gesture.current = null
+
+      const el = rowEls.current.get(g.rowId)
+      if (el) {
+        try {
+          el.releasePointerCapture(event.pointerId)
+        } catch {
+          // Already released; ignore.
+        }
+      }
+      resetRowTransform(g.rowId)
+
+      if (g.mode === 'horizontal') {
+        const dx = event.clientX - g.startX
+        if (dx > SWIPE_COMMIT_PX) indentRow(g.rowId)
+        else if (dx < -SWIPE_COMMIT_PX) outdentRow(g.rowId)
+      }
+    },
+    [indentRow, outdentRow, resetRowTransform]
+  )
+
+  const handlePointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLLIElement>) => {
+      const g = gesture.current
+      if (!g || g.pointerId !== event.pointerId) return
+      gesture.current = null
+
+      const el = rowEls.current.get(g.rowId)
+      if (el) {
+        try {
+          el.releasePointerCapture(event.pointerId)
+        } catch {
+          // Already released; ignore.
+        }
+      }
+      resetRowTransform(g.rowId)
+    },
+    [resetRowTransform]
+  )
+
   return (
     <main className="app">
       <ul className="list">
         {rows.map((row) => (
-          <li className="row" key={row.id}>
+          <li
+            className={`row${row.level === 1 ? ' sub' : ''}`}
+            key={row.id}
+            ref={registerRow(row.id)}
+            onPointerDown={(event) => handlePointerDown(event, row.id)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+          >
             {row.checkbox && (
               <button
                 key="checkbox"
@@ -275,9 +448,12 @@ export default function App() {
       )}
 
       <div className="toolbar">
+        <span className={`counter${remaining <= 100 ? ' low' : ''}`}>
+          {remaining} left
+        </span>
         <button
           type="button"
-          className="add-checkbox"
+          className="fab"
           aria-label="Add checkbox to current line"
           disabled={focusedId === null}
           // Keep the textarea focused (and its caret) when pressing this.
