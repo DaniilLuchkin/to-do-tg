@@ -34,17 +34,24 @@ body {
 
 .row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 6px 0;
+  /* Keep native vertical scrolling; horizontal swipes are handled in JS. */
+  touch-action: pan-y;
+}
+
+.row.sub {
+  padding-left: 24px;
 }
 
 .checkbox {
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
+  /* Nudge down so the box aligns with the first line of text. */
+  margin: 4px 0 0;
   padding: 0;
-  margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -67,6 +74,7 @@ body {
 .text {
   flex: 1 1 auto;
   min-width: 0;
+  display: block;
   background: transparent;
   border: none;
   outline: none;
@@ -76,6 +84,10 @@ body {
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .text::placeholder {
@@ -86,4 +98,11 @@ body {
 .text.done {
   text-decoration: line-through;
   color: var(--hint);
+}
+
+.notice {
+  margin: 16px 0 0;
+  color: var(--hint);
+  font-size: 13px;
+  line-height: 1.5;
 }

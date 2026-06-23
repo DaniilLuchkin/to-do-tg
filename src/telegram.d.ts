@@ -19,6 +19,10 @@ interface TelegramCloudStorage {
   ): void
 }
 
+interface TelegramHapticFeedback {
+  impactOccurred(style: string): void
+}
+
 interface TelegramWebApp {
   ready(): void
   expand(): void
@@ -26,6 +30,7 @@ interface TelegramWebApp {
   colorScheme: 'light' | 'dark'
   themeParams: TelegramThemeParams
   CloudStorage?: TelegramCloudStorage
+  HapticFeedback?: TelegramHapticFeedback
 }
 
 interface Window {
