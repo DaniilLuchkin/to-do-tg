@@ -6,10 +6,12 @@ TypeScript + Vite and plain CSS.
 
 ## Interaction
 
-- One vertical list of rows: a checkbox on the left, a borderless text input on the right.
-- **Enter** inserts a new empty task right after the current row and focuses it.
+- One vertical list of rows: a checkbox on the left, a borderless text field on the right. Long text wraps onto new lines and the field grows to fit.
+- **Enter** inserts a new empty task right after the current row and focuses it (the new row keeps the current row's indent).
 - **Backspace** on an empty row deletes it and moves the caret to the end of the previous row (the last remaining row is never deleted).
+- Subtasks (one level only): on desktop, **Tab** indents a row and **Shift+Tab** outdents it; on mobile, **swipe a task right** to indent and **left** to outdent.
 - Clicking the checkbox toggles done; done tasks stay in the list, shown with a line-through, and remain editable.
+- The whole list is stored as one value, capped at 4096 characters (Telegram CloudStorage's per-value limit). When the cap is reached, edits that would grow it are blocked and a subtle notice appears until you delete or shorten a task.
 
 ## Develop & build
 
