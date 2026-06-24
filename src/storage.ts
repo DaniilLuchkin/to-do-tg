@@ -12,7 +12,9 @@ export const MAX_VALUE_BYTES = 4096
 
 const INDEX_KEY = 'idx'
 const OLD_KEY = 'todos'
-const noteKey = (id: string): string => `n:${id}`
+// CloudStorage keys allow only [A-Za-z0-9_-], so the prefix uses '_' (not ':').
+const NOTE_PREFIX = 'n_'
+const noteKey = (id: string): string => `${NOTE_PREFIX}${id}`
 
 // Short, collision-resistant ids (~7 chars, charset [0-9a-z] — safe in keys).
 let idCounter = 0
@@ -126,7 +128,11 @@ export function kvGet(key: string): Promise<string | null> {
   const cloud = getCloud()
   if (cloud) {
     return new Promise((resolve) => {
-      cloud.getItem(key, (error, value) => resolve(error ? null : value))
+      try {
+        cloud.getItem(key, (error, value) => resolve(error ? null : value))
+      } catch {
+        resolve(null)
+      }
     })
   }
   try {
@@ -140,7 +146,11 @@ export function kvSet(key: string, value: string): Promise<void> {
   const cloud = getCloud()
   if (cloud) {
     return new Promise((resolve) => {
-      cloud.setItem(key, value, () => resolve())
+      try {
+        cloud.setItem(key, value, () => resolve())
+      } catch {
+        resolve()
+      }
     })
   }
   try {
@@ -155,7 +165,11 @@ export function kvRemove(key: string): Promise<void> {
   const cloud = getCloud()
   if (cloud) {
     return new Promise((resolve) => {
-      cloud.removeItem(key, () => resolve())
+      try {
+        cloud.removeItem(key, () => resolve())
+      } catch {
+        resolve()
+      }
     })
   }
   try {
@@ -170,7 +184,11 @@ export function kvKeys(): Promise<string[]> {
   const cloud = getCloud()
   if (cloud) {
     return new Promise((resolve) => {
-      cloud.getKeys((error, keys) => resolve(error ? [] : keys))
+      try {
+        cloud.getKeys((error, keys) => resolve(error ? [] : keys))
+      } catch {
+        resolve([])
+      }
     })
   }
   try {
@@ -223,7 +241,9 @@ export async function initNotes(): Promise<NoteMeta[]> {
   // content keys not referenced by the index.
   const keys = await kvKeys()
   const contentIds = new Set(
-    keys.filter((k) => k.startsWith('n:')).map((k) => k.slice(2))
+    keys
+      .filter((k) => k.startsWith(NOTE_PREFIX))
+      .map((k) => k.slice(NOTE_PREFIX.length))
   )
   const referenced = new Set(notes.map((n) => n.id))
 
