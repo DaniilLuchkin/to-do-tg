@@ -52,6 +52,26 @@ body {
   opacity: 0.5;
 }
 
+/* Far left-swipe: cue that releasing will delete the row. */
+.row.will-delete {
+  opacity: 0.4;
+}
+
+.delete-hint {
+  position: absolute;
+  right: 0;
+  top: 6px;
+  color: var(--hint);
+  font-size: 14px;
+  line-height: 1.2;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.row.will-delete .delete-hint {
+  visibility: visible;
+}
+
 /* In reorder mode, dragging owns the gesture — no native scroll. */
 .list.reorder .row {
   touch-action: none;
