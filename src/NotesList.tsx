@@ -30,9 +30,11 @@ function beginDragLock(): void {
   document.body.style.touchAction = 'none'
 }
 
-function endDragLock(reorderActive: boolean): void {
+// Vertical swipes are globally locked (Wallet-style); a drag never re-enables
+// them — restore the locked (disabled) state when the drag ends.
+function endDragLock(): void {
   document.body.style.touchAction = ''
-  if (!reorderActive) window.Telegram?.WebApp?.enableVerticalSwipes?.()
+  window.Telegram?.WebApp?.disableVerticalSwipes?.()
 }
 
 type Gesture = {
@@ -176,16 +178,17 @@ export default function NotesList({
     }
   }, [closeMenu, onHelp])
 
-  // Reorder mode keeps Telegram vertical swipes disabled for the whole mode.
+  // Vertical swipes stay globally locked (Wallet-style); reorder never undoes
+  // the lock, so toggling reorder mode just reasserts the disabled state.
   useEffect(() => {
-    if (reorderMode) window.Telegram?.WebApp?.disableVerticalSwipes?.()
-    else window.Telegram?.WebApp?.enableVerticalSwipes?.()
+    window.Telegram?.WebApp?.disableVerticalSwipes?.()
   }, [reorderMode])
 
-  // Restore swipes/scroll if this screen unmounts mid-interaction.
+  // Keep the lock (and clear any touch-action) if this screen unmounts
+  // mid-interaction — never leave vertical swipes re-enabled.
   useEffect(() => {
     return () => {
-      window.Telegram?.WebApp?.enableVerticalSwipes?.()
+      window.Telegram?.WebApp?.disableVerticalSwipes?.()
       document.body.style.touchAction = ''
     }
   }, [])
@@ -275,7 +278,7 @@ export default function NotesList({
       } catch {
         // ignore
       }
-      endDragLock(reorderModeRef.current)
+      endDragLock()
       setDraggingId(null)
       setDropLineTop(null)
 
@@ -303,7 +306,7 @@ export default function NotesList({
         // ignore
       }
     }
-    endDragLock(reorderModeRef.current)
+    endDragLock()
     setDraggingId(null)
     setDropLineTop(null)
   }, [])

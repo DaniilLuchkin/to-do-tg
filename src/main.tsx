@@ -5,7 +5,11 @@ import './styles.css'
 
 const webApp = window.Telegram?.WebApp
 webApp?.ready()
+// Wallet-style: fill the available height and lock vertical-swipe-to-collapse
+// for the whole session, so only pulling the native Telegram header minimizes
+// the app. Guarded so older clients / the browser fallback simply no-op.
 webApp?.expand?.()
+webApp?.disableVerticalSwipes?.()
 
 const theme = webApp?.themeParams
 if (theme) {

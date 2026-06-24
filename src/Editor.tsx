@@ -67,9 +67,11 @@ function beginDragLock(): void {
   document.body.style.touchAction = 'none'
 }
 
-function endDragLock(reorderActive: boolean): void {
+// Vertical swipes are globally locked (Wallet-style); a drag never re-enables
+// them — restore the locked (disabled) state when the drag ends.
+function endDragLock(): void {
   document.body.style.touchAction = ''
-  if (!reorderActive) window.Telegram?.WebApp?.enableVerticalSwipes?.()
+  window.Telegram?.WebApp?.disableVerticalSwipes?.()
 }
 
 type Gesture = {
@@ -210,8 +212,8 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
     return () => {
       wa?.BackButton?.offClick?.(cb)
       wa?.BackButton?.hide?.()
-      // Re-enable swipes in case we left mid-reorder, and persist.
-      window.Telegram?.WebApp?.enableVerticalSwipes?.()
+      // Keep vertical swipes locked (Wallet-style) even after a reorder; persist.
+      window.Telegram?.WebApp?.disableVerticalSwipes?.()
       document.body.style.touchAction = ''
       flushNowRef.current()
     }
@@ -239,9 +241,10 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
     if (panel === 'export') exportRef.current?.select()
   }, [panel, exportValue])
 
+  // Vertical swipes stay globally locked (Wallet-style); reorder never undoes
+  // the lock, so toggling reorder mode just reasserts the disabled state.
   useEffect(() => {
-    if (reorderMode) window.Telegram?.WebApp?.disableVerticalSwipes?.()
-    else window.Telegram?.WebApp?.enableVerticalSwipes?.()
+    window.Telegram?.WebApp?.disableVerticalSwipes?.()
   }, [reorderMode])
 
   const registerInput = useCallback(
@@ -680,7 +683,7 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
       } catch {
         // ignore
       }
-      endDragLock(reorderModeRef.current)
+      endDragLock()
       setDraggingId(null)
       setDropLineTop(null)
 
@@ -710,7 +713,7 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
         // ignore
       }
     }
-    endDragLock(reorderModeRef.current)
+    endDragLock()
     setDraggingId(null)
     setDropLineTop(null)
   }, [])

@@ -11,6 +11,10 @@ All controls use a consistent set of **monochrome line icons** (inline SVG,
 `stroke=currentColor`) via one reusable icon-button component; emoji appear
 only in body/help prose.
 
+On startup the app **expands to full height and locks vertical-swipe-to-collapse
+(Wallet-style)**, so swiping app content never minimizes it — minimize by pulling
+the native Telegram header. (No-ops in a plain browser / on older clients.)
+
 ## Notes list
 
 - The home screen is a list of **notes**; each note's title is the text of its **first line** (Apple Notes style). An empty first line shows a muted **"New note"** label.
