@@ -23,6 +23,8 @@ const MAX_VALUE_LENGTH = 4096
 
 // Horizontal travel (px) a swipe must exceed to commit an indent/outdent.
 const SWIPE_COMMIT_PX = 48
+// Left-swipe distance (px) beyond which release deletes the row.
+const SWIPE_DELETE_PX = 120
 
 // Cap on the in-memory undo history.
 const MAX_HISTORY = 100
@@ -54,9 +56,13 @@ function autoGrow(el: HTMLTextAreaElement): void {
   el.style.height = `${el.scrollHeight}px`
 }
 
-// Light haptic tick — only inside Telegram.
+// Haptic ticks — only inside Telegram.
 function hapticLight(): void {
   window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light')
+}
+
+function hapticMedium(): void {
+  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium')
 }
 
 // Active horizontal-swipe gesture state for a single pointer.
@@ -236,12 +242,19 @@ export default function App() {
 
   const toggleDone = useCallback(
     (id: string) => {
+      const base = rowsRef.current
+      const candidate = base.map((row) =>
+        row.id === id ? { ...row, done: !row.done } : row
+      )
+      // Marking done ON adds "d":1 — gate it; un-marking shrinks and is allowed.
+      if (tooLong(candidate)) {
+        setLimitReached(true)
+        return
+      }
       pushHistory()
       closeBurst()
       setLimitReached(false)
-      setRows((prev) =>
-        prev.map((row) => (row.id === id ? { ...row, done: !row.done } : row))
-      )
+      setRows(candidate)
     },
     [pushHistory, closeBurst]
   )
@@ -251,10 +264,18 @@ export default function App() {
       const base = rowsRef.current
       const row = base.find((r) => r.id === id)
       if (!row || row.level === 1) return
+      const candidate = base.map((r) =>
+        r.id === id ? { ...r, level: 1 as const } : r
+      )
+      // Indent adds "l":1 — gate it against the byte cap.
+      if (tooLong(candidate)) {
+        setLimitReached(true)
+        return
+      }
       pushHistory()
       closeBurst()
       setLimitReached(false)
-      setRows(base.map((r) => (r.id === id ? { ...r, level: 1 } : r)))
+      setRows(candidate)
       hapticLight()
     },
     [pushHistory, closeBurst]
@@ -270,6 +291,30 @@ export default function App() {
       setLimitReached(false)
       setRows(base.map((r) => (r.id === id ? { ...r, level: 0 } : r)))
       hapticLight()
+    },
+    [pushHistory, closeBurst]
+  )
+
+  // Delete a row (far left-swipe). Reversible via Undo. Never leaves zero rows.
+  const deleteRow = useCallback(
+    (id: string) => {
+      const base = rowsRef.current
+      const index = base.findIndex((r) => r.id === id)
+      if (index === -1) return
+      pushHistory()
+      closeBurst()
+      setLimitReached(false)
+      if (base.length <= 1) {
+        const fresh = createRow()
+        pendingFocus.current = { id: fresh.id, caretEnd: true }
+        setRows([fresh])
+      } else {
+        // Focus the previous row, or the new first row if this was the first.
+        const focusId = index > 0 ? base[index - 1].id : base[1].id
+        pendingFocus.current = { id: focusId, caretEnd: true }
+        setRows(base.filter((r) => r.id !== id))
+      }
+      hapticMedium()
     },
     [pushHistory, closeBurst]
   )
@@ -403,6 +448,7 @@ export default function App() {
     if (!el) return
     el.style.transition = 'transform 120ms ease'
     el.style.transform = 'translateX(0)'
+    el.classList.remove('will-delete')
   }, [])
 
   const swipeDown = useCallback(
@@ -454,6 +500,9 @@ export default function App() {
       if (el) {
         const damped = Math.max(-56, Math.min(56, dx * 0.4))
         el.style.transform = `translateX(${damped}px)`
+        // Past the delete threshold: cue that release will delete.
+        if (dx < -SWIPE_DELETE_PX) el.classList.add('will-delete')
+        else el.classList.remove('will-delete')
       }
     }
   }, [])
@@ -475,10 +524,11 @@ export default function App() {
       if (g.mode === 'horizontal') {
         const dx = event.clientX - g.startX
         if (dx > SWIPE_COMMIT_PX) indentRow(g.rowId)
+        else if (dx < -SWIPE_DELETE_PX) deleteRow(g.rowId)
         else if (dx < -SWIPE_COMMIT_PX) outdentRow(g.rowId)
       }
     },
-    [indentRow, outdentRow, resetRowTransform]
+    [indentRow, outdentRow, deleteRow, resetRowTransform]
   )
 
   const swipeCancel = useCallback(
@@ -736,6 +786,9 @@ export default function App() {
             >
               ⠿
             </span>
+            <span className="delete-hint" aria-hidden="true">
+              ✕
+            </span>
             {row.checkbox && (
               <button
                 key="checkbox"
@@ -768,9 +821,7 @@ export default function App() {
       </ul>
 
       {limitReached && (
-        <p className="notice">
-          Storage limit reached — delete or shorten a task to continue.
-        </p>
+        <p className="notice">Storage full — delete or shorten a line.</p>
       )}
 
       {panel === 'import' && (
