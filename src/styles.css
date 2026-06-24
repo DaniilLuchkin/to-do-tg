@@ -23,17 +23,19 @@ body {
 .app {
   max-width: 560px;
   margin: 0 auto;
-  /* Extra bottom padding so the list clears the fixed bottom-right button. */
-  padding: 24px 20px 88px;
+  /* Extra bottom padding so the list clears the fixed bottom toolbar. */
+  padding: 24px 20px 84px;
 }
 
 .list {
   list-style: none;
   margin: 0;
   padding: 0;
+  position: relative;
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -44,6 +46,51 @@ body {
 
 .row.sub {
   padding-left: 24px;
+}
+
+.row.dragging {
+  opacity: 0.5;
+}
+
+/* In reorder mode, dragging owns the gesture — no native scroll. */
+.list.reorder .row {
+  touch-action: none;
+}
+
+/* Drag handle: hidden by default, in the left margin so it adds no gutter. */
+.handle {
+  position: absolute;
+  left: -18px;
+  top: 6px;
+  width: 16px;
+  text-align: center;
+  color: var(--hint);
+  font-size: 14px;
+  line-height: 1.2;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  visibility: hidden;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .row:hover .handle {
+    visibility: visible;
+  }
+}
+
+.list.reorder .handle {
+  visibility: visible;
+}
+
+/* Thin monochrome insertion indicator while dragging. */
+.drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--text);
+  pointer-events: none;
 }
 
 .checkbox {
@@ -108,19 +155,51 @@ body {
   line-height: 1.5;
 }
 
-/* Fixed bottom-right cluster: remaining-characters counter + add button. */
+/* Slim fixed bottom bar: tool cluster + counter on the left, ✅ on the right. */
 .toolbar {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-top: 1px solid rgba(127, 127, 127, 0.2);
+}
+
+.tools {
   display: flex;
   align-items: center;
   gap: 10px;
-  pointer-events: none;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.tool-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  color: var(--hint);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tool-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tool-btn.active {
+  color: var(--text);
+  font-weight: 700;
 }
 
 .counter {
-  pointer-events: auto;
   color: var(--hint);
   font-size: 12px;
   line-height: 1;
@@ -152,4 +231,54 @@ body {
 .fab:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Export / Import sheet, sitting just above the toolbar. */
+.panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 49px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px;
+  background: var(--bg);
+  border-top: 1px solid rgba(127, 127, 127, 0.2);
+}
+
+.panel-text {
+  display: block;
+  width: 100%;
+  height: 160px;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}
+
+.panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Brief "Copied" confirmation. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
 }
