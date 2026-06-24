@@ -40,6 +40,7 @@ type NotesListProps = {
   onCreate: () => void
   onDelete: (id: string) => void
   onReorder: (notes: NoteMeta[]) => void
+  onHelp: () => void
 }
 
 export default function NotesList({
@@ -49,6 +50,7 @@ export default function NotesList({
   onCreate,
   onDelete,
   onReorder,
+  onHelp,
 }: NotesListProps) {
   const [reorderMode, setReorderMode] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -352,7 +354,17 @@ export default function NotesList({
 
   return (
     <main className="app">
-      <h1 className="notes-head">Notes</h1>
+      <div className="list-head">
+        <h1 className="notes-head">Notes</h1>
+        <button
+          type="button"
+          className="help-btn"
+          aria-label="Help"
+          onClick={onHelp}
+        >
+          ?
+        </button>
+      </div>
 
       <ul className={`list${reorderMode ? ' reorder' : ''}`} ref={listRef}>
         {notes.map((note) =>

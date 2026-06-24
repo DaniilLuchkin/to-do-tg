@@ -8,6 +8,7 @@ with React + TypeScript + Vite and plain CSS.
 
 - The home screen is a list of **notes**; each note's title is the text of its **first line** (Apple Notes style). An empty first line shows a muted **"New note"** label.
 - **Tap** a note to open it; **➕** (bottom-right) creates a new note and opens it.
+- A quiet **"?"** in the list header opens an in-app **Help** screen explaining the gestures and features; back (Telegram back button or the on-screen ←) returns to the list.
 - **Reorder notes:** on desktop, hover a note and drag its **⠿** handle; on mobile, tap **↕️** to enter reorder mode, then drag.
 - **Delete a note:** swipe it **far left**, then confirm (**Cancel / Delete**).
 - Storage is an index (`idx`) listing the notes plus one content value per note (`n:<id>`). The index is itself capped at 4096 bytes (~100–150 notes); when full, **"Note limit reached."** appears and ➕ is disabled. On first launch your previous single list is migrated to become the first note, and the app reconciles any orphaned data on startup.

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Editor from './Editor'
 import NotesList from './NotesList'
+import Help from './Help'
 import {
   initNotes,
   saveIndex,
@@ -14,7 +15,7 @@ import {
   type Row,
 } from './storage'
 
-type View = 'list' | 'editor'
+type View = 'list' | 'editor' | 'help'
 
 export default function App() {
   const [notes, setNotes] = useState<NoteMeta[]>([])
@@ -56,6 +57,9 @@ export default function App() {
     setView('list')
     setCurrentId(null)
   }, [])
+
+  const openHelp = useCallback(() => setView('help'), [])
+  const closeHelp = useCallback(() => setView('list'), [])
 
   // Editor reports the note's first-line title; refresh the index cache.
   const onTitleChange = useCallback((id: string, title: string) => {
@@ -102,6 +106,10 @@ export default function App() {
 
   if (!loaded) return <main className="app" />
 
+  if (view === 'help') {
+    return <Help onClose={closeHelp} />
+  }
+
   if (view === 'editor' && currentId) {
     return (
       <Editor
@@ -121,6 +129,7 @@ export default function App() {
       onCreate={createNote}
       onDelete={deleteNote}
       onReorder={reorderNotes}
+      onHelp={openHelp}
     />
   )
 }
