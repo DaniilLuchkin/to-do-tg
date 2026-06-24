@@ -76,8 +76,9 @@ export default function App() {
   // and whether the caret should be placed at the end.
   const pendingFocus = useRef<{ id: string; caretEnd: boolean } | null>(null)
 
-  // Characters remaining before the storage cap (never shown below 0).
-  const remaining = Math.max(0, MAX_VALUE_LENGTH - serialize(rows).length)
+  // Storage usage: real UTF-8 bytes of the serialized list out of the cap.
+  const usedBytes = new TextEncoder().encode(serialize(rows)).length
+  const lowStorage = MAX_VALUE_LENGTH - usedBytes <= 100
 
   // Initial load. Always guarantee at least one row to type into.
   useEffect(() => {
@@ -207,14 +208,26 @@ export default function App() {
     hapticLight()
   }, [])
 
-  // The bottom-right control: give the currently focused row a checkbox (text
-  // and caret preserved). Only ever turns the checkbox on.
-  const addCheckboxToFocused = useCallback(() => {
+  // The bottom-right control: toggle the focused row between plain text and a
+  // checkbox row (text and caret preserved).
+  const toggleFocusedCheckbox = useCallback(() => {
     const id = focusedIdRef.current
     if (!id) return
     const base = rowsRef.current
     const row = base.find((r) => r.id === id)
-    if (!row || row.checkbox) return
+    if (!row) return
+    if (row.checkbox) {
+      // Revert to plain text (also clears done). Shrinks — always allowed.
+      setLimitReached(false)
+      setRows(
+        base.map((r) =>
+          r.id === id ? { ...r, checkbox: false, done: false } : r
+        )
+      )
+      inputs.current.get(id)?.focus()
+      return
+    }
+    // Turn the checkbox on. Grows the string — respect the storage guard.
     const candidate = base.map((r) =>
       r.id === id ? { ...r, checkbox: true } : r
     )
@@ -431,7 +444,6 @@ export default function App() {
               className={`text${row.checkbox && row.done ? ' done' : ''}`}
               rows={1}
               value={row.text}
-              placeholder="New task"
               onChange={(event) => handleChange(row.id, event)}
               onKeyDown={(event) => handleKeyDown(event, row.id)}
               onFocus={() => handleFocus(row.id)}
@@ -448,18 +460,18 @@ export default function App() {
       )}
 
       <div className="toolbar">
-        <span className={`counter${remaining <= 100 ? ' low' : ''}`}>
-          {remaining} left
+        <span className={`counter${lowStorage ? ' low' : ''}`}>
+          {usedBytes}/{MAX_VALUE_LENGTH} B
         </span>
         <button
           type="button"
           className="fab"
-          aria-label="Add checkbox to current line"
+          aria-label="Toggle checkbox on current line"
           disabled={focusedId === null}
           // Keep the textarea focused (and its caret) when pressing this.
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
-          onClick={addCheckboxToFocused}
+          onClick={toggleFocusedCheckbox}
         >
           ✅
         </button>
