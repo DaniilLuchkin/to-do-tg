@@ -7,14 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import {
-  loadRows,
-  saveRows,
-  serialize,
-  rowsToText,
-  textToRows,
-  type Row,
-} from './storage'
+import { loadRows, saveRows, serialize, rowsToText, type Row } from './storage'
 
 // Telegram CloudStorage allows at most 4096 bytes per value. We store the whole
 // list as one (compact) JSON string under "todos", so the binding limit is the
@@ -65,6 +58,20 @@ function hapticMedium(): void {
   window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium')
 }
 
+// Suspend Telegram's vertical swipe-to-minimize during a drag (newer Bot API;
+// guarded so older clients no-op). Also stop the browser treating the drag as
+// a scroll/minimize via body touch-action.
+function beginDragLock(): void {
+  window.Telegram?.WebApp?.disableVerticalSwipes?.()
+  document.body.style.touchAction = 'none'
+}
+
+function endDragLock(reorderActive: boolean): void {
+  document.body.style.touchAction = ''
+  // In Reorder mode the whole mode keeps swipes disabled; don't re-enable here.
+  if (!reorderActive) window.Telegram?.WebApp?.enableVerticalSwipes?.()
+}
+
 // Active horizontal-swipe gesture state for a single pointer.
 type Gesture = {
   pointerId: number
@@ -90,10 +97,8 @@ export default function App() {
   const [reorderMode, setReorderMode] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropLineTop, setDropLineTop] = useState<number | null>(null)
-  const [panel, setPanel] = useState<'none' | 'export' | 'import'>('none')
+  const [panel, setPanel] = useState<'none' | 'export'>('none')
   const [exportValue, setExportValue] = useState('')
-  const [importValue, setImportValue] = useState('')
-  const [importError, setImportError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
   // Always-current mirrors for event handlers.
@@ -177,6 +182,13 @@ export default function App() {
   useEffect(() => {
     if (panel === 'export') exportRef.current?.select()
   }, [panel, exportValue])
+
+  // Reorder mode keeps Telegram's vertical swipe-to-minimize disabled for the
+  // whole mode (several drags); restored on exit so the app can close normally.
+  useEffect(() => {
+    if (reorderMode) window.Telegram?.WebApp?.disableVerticalSwipes?.()
+    else window.Telegram?.WebApp?.enableVerticalSwipes?.()
+  }, [reorderMode])
 
   const registerInput = useCallback(
     (id: string) => (el: HTMLTextAreaElement | null) => {
@@ -595,6 +607,8 @@ export default function App() {
       const startIndex = rowsRef.current.findIndex((r) => r.id === id)
       if (startIndex === -1) return
       drag.current = { pointerId: event.pointerId, rowId: id, startIndex }
+      // Stop Telegram minimizing the app / the page scrolling during the drag.
+      beginDragLock()
       const el = rowEls.current.get(id)
       try {
         el?.setPointerCapture(event.pointerId)
@@ -618,6 +632,7 @@ export default function App() {
       } catch {
         // ignore
       }
+      endDragLock(reorderModeRef.current)
       setDraggingId(null)
       setDropLineTop(null)
 
@@ -647,6 +662,8 @@ export default function App() {
         // ignore
       }
     }
+    // Always restore swipes/scroll even if the drag was interrupted.
+    endDragLock(reorderModeRef.current)
     setDraggingId(null)
     setDropLineTop(null)
   }, [])
@@ -731,58 +748,8 @@ export default function App() {
     }
   }, [showCopied])
 
-  // Parse + replace the whole list from plain text. Returns false (no change)
-  // if the imported list would exceed the byte cap.
-  const importFromText = useCallback(
-    (text: string): boolean => {
-      const parsed = textToRows(text, newId)
-      const next = parsed.length > 0 ? parsed : [createRow()]
-      if (serializedBytes(next) > MAX_VALUE_LENGTH) return false
-      pushHistory()
-      closeBurst()
-      setLimitReached(false)
-      setRows(next)
-      return true
-    },
-    [pushHistory, closeBurst]
-  )
-
-  // 📥 one-tap import: try reading the clipboard; fall back to a paste panel.
-  const onImport = useCallback(() => {
-    const openPanel = (text: string, error: string | null) => {
-      setImportValue(text)
-      setImportError(error)
-      setPanel('import')
-    }
-    const clip = navigator.clipboard
-    if (clip && typeof clip.readText === 'function') {
-      clip.readText().then(
-        (text) => {
-          if (!text) {
-            openPanel('', null)
-          } else if (!importFromText(text)) {
-            openPanel(text, `Too large for ${MAX_VALUE_LENGTH} B. Trim and try again.`)
-          }
-        },
-        () => openPanel('', null)
-      )
-    } else {
-      openPanel('', null)
-    }
-  }, [importFromText])
-
-  const doImport = useCallback(() => {
-    if (!importFromText(importValue)) {
-      setImportError(`Too large for ${MAX_VALUE_LENGTH} B. Trim and try again.`)
-      return
-    }
-    setPanel('none')
-    setImportError(null)
-  }, [importValue, importFromText])
-
   const closePanel = useCallback(() => {
     setPanel('none')
-    setImportError(null)
   }, [])
 
   const noFocusMouseDown = useCallback(
@@ -852,26 +819,6 @@ export default function App() {
         <p className="notice">Storage full — delete or shorten a line.</p>
       )}
 
-      {panel === 'import' && (
-        <div className="panel" role="dialog" aria-label="Import list">
-          <textarea
-            className="panel-text"
-            autoFocus
-            value={importValue}
-            onChange={(event) => setImportValue(event.target.value)}
-          />
-          {importError && <p className="notice">{importError}</p>}
-          <div className="panel-actions">
-            <button type="button" className="tool-btn" onClick={closePanel}>
-              Cancel
-            </button>
-            <button type="button" className="tool-btn" onClick={doImport}>
-              Import
-            </button>
-          </div>
-        </div>
-      )}
-
       {panel === 'export' && (
         <div className="panel" role="dialog" aria-label="Export list">
           <textarea
@@ -912,14 +859,6 @@ export default function App() {
             onClick={onExport}
           >
             📋
-          </button>
-          <button
-            type="button"
-            className="act"
-            aria-label="Paste list from text"
-            onClick={onImport}
-          >
-            📥
           </button>
           <button
             type="button"
