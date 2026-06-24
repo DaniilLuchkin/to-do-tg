@@ -1,4 +1,7 @@
 import { useEffect, useRef } from 'react'
+import IconButton from './IconButton'
+
+const HAS_BACK_BUTTON = !!window.Telegram?.WebApp?.BackButton
 
 type HelpProps = {
   onClose: () => void
@@ -22,16 +25,13 @@ export default function Help({ onClose }: HelpProps) {
 
   return (
     <main className="app help">
-      <div className="editor-head">
-        <button
-          type="button"
-          className="back"
-          aria-label="Close help"
-          onClick={onClose}
-        >
-          ←
-        </button>
-      </div>
+      {!HAS_BACK_BUTTON && (
+        <div className="topbar">
+          <div className="bar-actions">
+            <IconButton icon="chevron-left" label="Close help" onClick={onClose} />
+          </div>
+        </div>
+      )}
 
       <h1 className="help-title">How to use To-Do Notes</h1>
 

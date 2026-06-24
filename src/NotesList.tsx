@@ -6,6 +6,8 @@ import {
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import IconButton from './IconButton'
+import Icon from './Icon'
 import {
   exportAllNotes,
   importAllNotes,
@@ -461,28 +463,31 @@ export default function NotesList({
 
   return (
     <main className="app">
-      <div className="list-head">
-        <h1 className="notes-head">Notes</h1>
-        <div className="head-actions">
-          <button
-            type="button"
-            className="help-btn"
-            aria-label="Help"
-            onClick={onHelp}
-          >
-            ?
-          </button>
-          <button
-            type="button"
-            className="help-btn"
-            aria-label="Menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((m) => !m)}
-          >
-            ⋯
-          </button>
+      <header className="list-head">
+        <div className="head-left">
+          <h1 className="title">Notes</h1>
+          <span className="caption">
+            {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+          </span>
         </div>
-      </div>
+        <div className="head-actions">
+          <IconButton
+            icon="reorder"
+            label="Reorder notes"
+            variant="surface"
+            active={reorderMode}
+            pressed={reorderMode}
+            onClick={() => setReorderMode((m) => !m)}
+          />
+          <IconButton
+            icon="menu"
+            label="Menu"
+            variant="surface"
+            pressed={menuOpen}
+            onClick={() => setMenuOpen((m) => !m)}
+          />
+        </div>
+      </header>
 
       <input
         ref={fileInputRef}
@@ -494,69 +499,92 @@ export default function NotesList({
 
       {menuOpen && (
         <>
-          <div className="overlay" onClick={closeMenu} />
+          <div className="scrim" onClick={closeMenu} />
           <div className="menu" role="menu">
             <button
               type="button"
-              className="menu-item"
+              className="menu-row"
               onClick={() => setAboutOpen((a) => !a)}
             >
-              About
+              <span className="menu-icon">
+                <Icon name="info" size={20} />
+              </span>
+              <span className="menu-label">About</span>
             </button>
             {aboutOpen && (
               <p className="menu-about">
                 To-Do Notes — a minimalist notes app for Telegram. In active
-                development. App v{APP_VERSION} (schema v{SCHEMA_VERSION}).
-                "Add to home screen" may not be available on every device.
+                development. App v{APP_VERSION} (schema v{SCHEMA_VERSION}). “Add
+                to home screen” may not be available on every device.
               </p>
             )}
-            <button type="button" className="menu-item" onClick={onDonate}>
-              Donate ❤️
+            <button type="button" className="menu-row" onClick={onDonate}>
+              <span className="menu-icon">
+                <Icon name="heart" size={20} />
+              </span>
+              <span className="menu-label">Donate</span>
             </button>
             <button
               type="button"
-              className="menu-item"
+              className="menu-row"
               onClick={() => {
                 closeMenu()
                 onHelp()
               }}
             >
-              Help
+              <span className="menu-icon">
+                <Icon name="help" size={20} />
+              </span>
+              <span className="menu-label">Help</span>
             </button>
-            <button type="button" className="menu-item" onClick={onExportBackup}>
-              Export all notes (backup)
+            <button type="button" className="menu-row" onClick={onExportBackup}>
+              <span className="menu-icon">
+                <Icon name="download" size={20} />
+              </span>
+              <span className="menu-label">Export all notes</span>
             </button>
-            <button type="button" className="menu-item" onClick={onImportClick}>
-              Import all notes (restore)
+            <button type="button" className="menu-row" onClick={onImportClick}>
+              <span className="menu-icon">
+                <Icon name="upload" size={20} />
+              </span>
+              <span className="menu-label">Import all notes</span>
             </button>
-            <button type="button" className="menu-item" onClick={onAddHome}>
-              Add to home screen
+            <button type="button" className="menu-row" onClick={onAddHome}>
+              <span className="menu-icon">
+                <Icon name="home" size={20} />
+              </span>
+              <span className="menu-label">Add to home screen</span>
             </button>
             {/* TODO: future product links / sections go here. */}
-            <p className="menu-about menu-more">More — coming soon.</p>
+            <div className="menu-row disabled" aria-disabled="true">
+              <span className="menu-icon">
+                <Icon name="ellipsis" size={20} />
+              </span>
+              <span className="menu-label">More — coming soon</span>
+            </div>
           </div>
         </>
       )}
 
       {pendingImport !== null && (
         <>
-          <div className="overlay" onClick={() => setPendingImport(null)} />
-          <div className="menu" role="dialog" aria-label="Confirm import">
-            <p className="menu-about">
-              Replace ALL notes with the contents of this backup file? Your
-              current notes are backed up first, but this cannot be undone here.
+          <div className="scrim" onClick={() => setPendingImport(null)} />
+          <div className="sheet" role="dialog" aria-label="Confirm import">
+            <p className="sheet-text">
+              Replace all notes with the contents of this backup file? Your
+              current notes are backed up first, but this can't be undone here.
             </p>
-            <div className="panel-actions">
+            <div className="sheet-actions">
               <button
                 type="button"
-                className="tool-btn"
+                className="btn"
                 onClick={() => setPendingImport(null)}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="tool-btn"
+                className="btn btn-danger"
                 onClick={confirmImport}
               >
                 Replace
@@ -573,14 +601,14 @@ export default function NotesList({
               <span className="confirm-text">Delete this note?</span>
               <button
                 type="button"
-                className="tool-btn"
+                className="btn"
                 onClick={() => setConfirmingId(null)}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="tool-btn"
+                className="btn btn-danger"
                 onClick={() => {
                   onDelete(note.id)
                   setConfirmingId(null)
@@ -631,35 +659,19 @@ export default function NotesList({
       </ul>
 
       {notes.length === 0 && (
-        <p className="empty">No notes yet — tap ➕ to create one.</p>
+        <p className="empty">No notes yet — tap + to create one.</p>
       )}
 
       {limitMessage && <p className="notice">{limitMessage}</p>}
 
       <div className="toolbar">
-        <span className="counter">
-          {notes.length} {notes.length === 1 ? 'note' : 'notes'}
-        </span>
-        <div className="cluster">
-          <button
-            type="button"
-            className={`act${reorderMode ? ' active' : ''}`}
-            aria-label="Reorder notes"
-            aria-pressed={reorderMode}
-            onClick={() => setReorderMode((m) => !m)}
-          >
-            ↕️
-          </button>
-          <button
-            type="button"
-            className="act"
-            aria-label="New note"
-            disabled={!canCreate}
-            onClick={onCreate}
-          >
-            ➕
-          </button>
-        </div>
+        <IconButton
+          icon="plus"
+          label="New note"
+          variant="primary"
+          disabled={!canCreate}
+          onClick={onCreate}
+        />
       </div>
     </main>
   )
