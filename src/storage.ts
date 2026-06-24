@@ -73,25 +73,6 @@ export function rowsToText(rows: Row[]): string {
     .join('\n')
 }
 
-// Parse plain text back into rows, one row per line. Fresh ids via makeId.
-export function textToRows(text: string, makeId: () => string): Row[] {
-  return text.split(/\r?\n/).map((raw) => {
-    let line = raw
-    let level: 0 | 1 = 0
-    if (line.startsWith('  ')) {
-      level = 1
-      line = line.slice(2)
-    }
-    if (line.startsWith('- [ ] ')) {
-      return { id: makeId(), text: line.slice(6), checkbox: true, done: false, level }
-    }
-    if (line.startsWith('- [x] ') || line.startsWith('- [X] ')) {
-      return { id: makeId(), text: line.slice(6), checkbox: true, done: true, level }
-    }
-    return { id: makeId(), text: line, checkbox: false, done: false, level }
-  })
-}
-
 export function loadRows(): Promise<Row[]> {
   const cloud = getCloudStorage()
   if (cloud) {

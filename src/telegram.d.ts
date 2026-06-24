@@ -25,12 +25,16 @@ interface TelegramHapticFeedback {
 
 interface TelegramWebApp {
   ready(): void
-  expand(): void
+  expand?(): void
   initData: string
   colorScheme: 'light' | 'dark'
   themeParams: TelegramThemeParams
   CloudStorage?: TelegramCloudStorage
   HapticFeedback?: TelegramHapticFeedback
+  // Newer Bot API versions — guard every call with `?.` so old clients no-op.
+  isVerticalSwipesEnabled?: boolean
+  disableVerticalSwipes?(): void
+  enableVerticalSwipes?(): void
 }
 
 interface Window {

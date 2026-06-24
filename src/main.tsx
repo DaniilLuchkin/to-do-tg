@@ -5,7 +5,7 @@ import './styles.css'
 
 const webApp = window.Telegram?.WebApp
 webApp?.ready()
-webApp?.expand()
+webApp?.expand?.()
 
 const theme = webApp?.themeParams
 if (theme) {
