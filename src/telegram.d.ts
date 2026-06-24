@@ -17,10 +17,22 @@ interface TelegramCloudStorage {
     value: string,
     callback?: (error: string | null, success: boolean) => void
   ): void
+  removeItem(
+    key: string,
+    callback?: (error: string | null, removed: boolean) => void
+  ): void
+  getKeys(callback: (error: string | null, keys: string[]) => void): void
 }
 
 interface TelegramHapticFeedback {
   impactOccurred(style: string): void
+}
+
+interface TelegramBackButton {
+  show?(): void
+  hide?(): void
+  onClick?(callback: () => void): void
+  offClick?(callback: () => void): void
 }
 
 interface TelegramWebApp {
@@ -31,6 +43,7 @@ interface TelegramWebApp {
   themeParams: TelegramThemeParams
   CloudStorage?: TelegramCloudStorage
   HapticFeedback?: TelegramHapticFeedback
+  BackButton?: TelegramBackButton
   // Newer Bot API versions — guard every call with `?.` so old clients no-op.
   isVerticalSwipesEnabled?: boolean
   disableVerticalSwipes?(): void
