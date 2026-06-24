@@ -731,26 +731,54 @@ export default function App() {
     }
   }, [showCopied])
 
-  const openImport = useCallback(() => {
-    setImportValue('')
-    setImportError(null)
-    setPanel('import')
-  }, [])
+  // Parse + replace the whole list from plain text. Returns false (no change)
+  // if the imported list would exceed the byte cap.
+  const importFromText = useCallback(
+    (text: string): boolean => {
+      const parsed = textToRows(text, newId)
+      const next = parsed.length > 0 ? parsed : [createRow()]
+      if (serializedBytes(next) > MAX_VALUE_LENGTH) return false
+      pushHistory()
+      closeBurst()
+      setLimitReached(false)
+      setRows(next)
+      return true
+    },
+    [pushHistory, closeBurst]
+  )
+
+  // 📥 one-tap import: try reading the clipboard; fall back to a paste panel.
+  const onImport = useCallback(() => {
+    const openPanel = (text: string, error: string | null) => {
+      setImportValue(text)
+      setImportError(error)
+      setPanel('import')
+    }
+    const clip = navigator.clipboard
+    if (clip && typeof clip.readText === 'function') {
+      clip.readText().then(
+        (text) => {
+          if (!text) {
+            openPanel('', null)
+          } else if (!importFromText(text)) {
+            openPanel(text, `Too large for ${MAX_VALUE_LENGTH} B. Trim and try again.`)
+          }
+        },
+        () => openPanel('', null)
+      )
+    } else {
+      openPanel('', null)
+    }
+  }, [importFromText])
 
   const doImport = useCallback(() => {
-    const parsed = textToRows(importValue, newId)
-    const next = parsed.length > 0 ? parsed : [createRow()]
-    const bytes = serializedBytes(next)
-    if (bytes > MAX_VALUE_LENGTH) {
-      setImportError(`Too large: ${bytes}/${MAX_VALUE_LENGTH} B. Trim and try again.`)
+    if (!importFromText(importValue)) {
+      setImportError(`Too large for ${MAX_VALUE_LENGTH} B. Trim and try again.`)
       return
     }
-    pushHistory()
-    closeBurst()
-    setLimitReached(false)
-    setRows(next)
     setPanel('none')
-  }, [importValue, pushHistory, closeBurst])
+    setImportError(null)
+  }, [importValue, importFromText])
 
   const closePanel = useCallback(() => {
     setPanel('none')
@@ -863,57 +891,57 @@ export default function App() {
       {copied && <div className="toast">Copied</div>}
 
       <div className="toolbar">
-        <div className="tools">
+        <span className={`counter${lowStorage ? ' low' : ''}`}>
+          {usedBytes}/{MAX_VALUE_LENGTH} B
+        </span>
+        <div className="cluster">
           <button
             type="button"
-            className="tool-btn"
+            className="act"
             aria-label="Undo"
             disabled={undoCount === 0}
             onPointerDown={noFocusMouseDown}
             onClick={undo}
           >
-            ↶
+            ↩️
           </button>
           <button
             type="button"
-            className="tool-btn"
-            aria-label="Export list as text"
+            className="act"
+            aria-label="Copy list as text"
             onClick={onExport}
           >
-            Export
+            📋
           </button>
           <button
             type="button"
-            className="tool-btn"
-            aria-label="Import list from text"
-            onClick={openImport}
+            className="act"
+            aria-label="Paste list from text"
+            onClick={onImport}
           >
-            Import
+            📥
           </button>
           <button
             type="button"
-            className={`tool-btn${reorderMode ? ' active' : ''}`}
-            aria-label="Toggle reorder mode"
+            className={`act${reorderMode ? ' active' : ''}`}
+            aria-label="Reorder mode"
             aria-pressed={reorderMode}
             onClick={() => setReorderMode((m) => !m)}
           >
-            ⠿
+            ↕️
           </button>
-          <span className={`counter${lowStorage ? ' low' : ''}`}>
-            {usedBytes}/{MAX_VALUE_LENGTH} B
-          </span>
+          <button
+            type="button"
+            className="act"
+            aria-label="Toggle checkbox on current line"
+            disabled={focusedId === null}
+            onPointerDown={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={toggleFocusedCheckbox}
+          >
+            ✅
+          </button>
         </div>
-        <button
-          type="button"
-          className="fab"
-          aria-label="Toggle checkbox on current line"
-          disabled={focusedId === null}
-          onPointerDown={(event) => event.preventDefault()}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={toggleFocusedCheckbox}
-        >
-          ✅
-        </button>
       </div>
     </main>
   )
