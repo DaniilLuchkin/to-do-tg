@@ -7,6 +7,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import IconButton from './IconButton'
+import Icon from './Icon'
 import {
   loadNote,
   saveNoteContent,
@@ -17,6 +19,9 @@ import {
   MAX_VALUE_BYTES,
   type Row,
 } from './storage'
+
+// When Telegram's BackButton exists, rely on it (no duplicate in-app back).
+const HAS_BACK_BUTTON = !!window.Telegram?.WebApp?.BackButton
 
 // Per-note byte cap.
 const MAX_VALUE_LENGTH = MAX_VALUE_BYTES
@@ -801,45 +806,38 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
   return (
     <main className="app editor">
       <div className="topbar">
-        <button
-          type="button"
-          className="nav-btn"
-          aria-label="Back"
-          onPointerDown={noFocusMouseDown}
-          onClick={handleBack}
-        >
-          ←
-        </button>
-        <button
-          type="button"
-          className="nav-btn"
-          aria-label="Undo"
-          disabled={undoCount === 0}
-          onPointerDown={noFocusMouseDown}
-          onClick={undo}
-        >
-          ↩️
-        </button>
-        <button
-          type="button"
-          className={`nav-btn${reorderMode ? ' active' : ''}`}
-          aria-label="Reorder"
-          aria-pressed={reorderMode}
-          onPointerDown={noFocusMouseDown}
-          onClick={() => setReorderMode((m) => !m)}
-        >
-          ↕️
-        </button>
-        <button
-          type="button"
-          className="nav-btn"
-          aria-label="Copy note as text"
-          onPointerDown={noFocusMouseDown}
-          onClick={onExport}
-        >
-          📋
-        </button>
-        <span className={`counter${lowStorage ? ' low' : ''}`}>
+        <div className="bar-actions">
+          {!HAS_BACK_BUTTON && (
+            <IconButton
+              icon="chevron-left"
+              label="Back"
+              onPointerDown={noFocusMouseDown}
+              onClick={handleBack}
+            />
+          )}
+          <IconButton
+            icon="undo"
+            label="Undo"
+            disabled={undoCount === 0}
+            onPointerDown={noFocusMouseDown}
+            onClick={undo}
+          />
+          <IconButton
+            icon="reorder"
+            label="Reorder rows"
+            active={reorderMode}
+            pressed={reorderMode}
+            onPointerDown={noFocusMouseDown}
+            onClick={() => setReorderMode((m) => !m)}
+          />
+          <IconButton
+            icon="copy"
+            label="Copy note as text"
+            onPointerDown={noFocusMouseDown}
+            onClick={onExport}
+          />
+        </div>
+        <span className={`caption counter${lowStorage ? ' low' : ''}`}>
           {usedBytes}/{MAX_VALUE_LENGTH} B
         </span>
       </div>
@@ -876,7 +874,7 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
                 aria-label={row.done ? 'Mark as not done' : 'Mark as done'}
                 onClick={() => toggleDone(row.id)}
               >
-                {row.done ? '✓' : ''}
+                {row.done && <Icon name="tick" size={14} />}
               </button>
             )}
             <textarea
@@ -926,14 +924,14 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
       <div className="toolbar">
         <button
           type="button"
-          className="act"
+          className="fab-primary"
           aria-label="Toggle checkbox on current line"
           disabled={focusedId === null}
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={toggleFocusedCheckbox}
         >
-          ✅
+          <Icon name="check" size={22} />
         </button>
       </div>
     </main>
