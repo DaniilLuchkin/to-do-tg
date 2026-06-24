@@ -8,16 +8,18 @@ with React + TypeScript + Vite and plain CSS.
 
 - The home screen is a list of **notes**; each note's title is the text of its **first line** (Apple Notes style). An empty first line shows a muted **"New note"** label.
 - **Tap** a note to open it; **➕** (bottom-right) creates a new note and opens it.
-- A quiet **"?"** in the list header opens an in-app **Help** screen explaining the gestures and features; back (Telegram back button or the on-screen ←) returns to the list.
+- A quiet **"?"** in the list header opens the in-app **Help** screen; a **"⋯"** menu next to it has **About** (app/schema version), **Donate ❤️**, **Help**, **Local backup** (export all notes to a JSON file, or import one to restore — replaces everything, with a confirm and an automatic pre-import backup), **Add to home screen** (best-effort; not available on every device), and a **More** placeholder.
 - **Reorder notes:** on desktop, hover a note and drag its **⠿** handle; on mobile, tap **↕️** to enter reorder mode, then drag.
 - **Delete a note:** swipe it **far left**, then confirm (**Cancel / Delete**).
-- Storage is an index (`idx`) listing the notes plus one content value per note (`n:<id>`). The index is itself capped at 4096 bytes (~100–150 notes); when full, **"Note limit reached."** appears and ➕ is disabled. On first launch your previous single list is migrated to become the first note, and the app reconciles any orphaned data on startup.
+- You can keep up to **50 notes**; at the cap, **"Note limit reached (50)."** appears and ➕ is disabled.
+- **Your data is protected.** Storage is a versioned index (`idx`, schema-versioned) plus one content value per note (`n_<id>`). On launch the app loads before it ever writes (so an empty initial state can't overwrite real data), runs explicit migrations for older schemas after copying everything to `bak_*` backup keys, refuses to overwrite real data with an empty/unrecognized value, and shows a non-destructive error rather than wiping data it can't parse. The old single list is migrated to the first note on first launch.
 
 ## Editor (one note)
 
+- A fixed **top action bar** holds the navigation/actions: **←** back, **↩️** undo, **↕️** reorder rows, **📋** copy, and the per-note **`used/4096 B` counter** (right-aligned). The **✅** checkbox-toggle button is the only control at the **bottom-right** (next to the keyboard). Text never slides under either bar, and the caret stays visible as a line wraps or on Enter.
+- When you open an empty note, the first line shows a faint **"Tap here to write"** hint (tapping it focuses the line and raises the keyboard); it disappears as soon as you type.
 - One vertical list of borderless text lines. Long text wraps onto new lines and each field grows to fit.
 - Lines are **plain text by default** — no checkbox, just a note. **←** (or the Telegram back button) returns to the notes list, saving the note.
-- A fixed **bottom-right cluster** of emoji buttons holds all actions, left→right: **↩️** undo, **📋** copy, **↕️** reorder rows, **✅** checkbox. The per-note **`used/4096 B` counter** sits just above it.
 - **✅** toggles the currently focused line between plain text and a checkbox (keeping your text); turning the checkbox off also clears its done state.
 - Clicking a checkbox toggles done; done lines stay in the list, shown with a line-through, and remain editable.
 - **Subtasks (one level):** swipe a line **right to indent** and **left a short distance to outdent** (drag with the mouse on desktop). Swipe **left far to delete** the line (the row fades with an ✕ cue; Undo restores it). Indented lines are shifted right; both plain and checkbox lines can be indented.
