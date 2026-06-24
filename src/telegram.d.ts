@@ -48,6 +48,7 @@ interface TelegramWebApp {
   isVerticalSwipesEnabled?: boolean
   disableVerticalSwipes?(): void
   enableVerticalSwipes?(): void
+  addToHomeScreen?(): void
 }
 
 interface Window {

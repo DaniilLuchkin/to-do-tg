@@ -3,11 +3,21 @@ import {
   useEffect,
   useRef,
   useState,
+  type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import type { NoteMeta } from './storage'
+import {
+  exportAllNotes,
+  importAllNotes,
+  APP_VERSION,
+  SCHEMA_VERSION,
+  type NoteMeta,
+} from './storage'
 
 const SWIPE_DELETE_PX = 120
+
+// TODO: fill in with the real Telegram Stars invoice / donation link.
+const DONATE_URL = ''
 
 function hapticLight(): void {
   window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light')
@@ -36,23 +46,31 @@ type Drag = { pointerId: number; noteId: string; startIndex: number }
 type NotesListProps = {
   notes: NoteMeta[]
   canCreate: boolean
+  limitMessage: string | null
   onOpen: (id: string) => void
   onCreate: () => void
   onDelete: (id: string) => void
   onReorder: (notes: NoteMeta[]) => void
   onHelp: () => void
+  onNotesReplaced: (notes: NoteMeta[]) => void
 }
 
 export default function NotesList({
   notes,
   canCreate,
+  limitMessage,
   onOpen,
   onCreate,
   onDelete,
   onReorder,
   onHelp,
+  onNotesReplaced,
 }: NotesListProps) {
   const [reorderMode, setReorderMode] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const [pendingImport, setPendingImport] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropLineTop, setDropLineTop] = useState<number | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
@@ -66,6 +84,95 @@ export default function NotesList({
   const listRef = useRef<HTMLUListElement | null>(null)
   const gesture = useRef<Gesture | null>(null)
   const drag = useRef<Drag | null>(null)
+
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false)
+    setAboutOpen(false)
+  }, [])
+
+  // Telegram BackButton dismisses the menu / import confirm when open.
+  const overlayOpen = menuOpen || pendingImport !== null
+  const dismissOverlayRef = useRef<() => void>(() => {})
+  dismissOverlayRef.current = () => {
+    if (pendingImport !== null) setPendingImport(null)
+    else closeMenu()
+  }
+  useEffect(() => {
+    const wa = window.Telegram?.WebApp
+    if (!overlayOpen) return
+    wa?.BackButton?.show?.()
+    const cb = () => dismissOverlayRef.current()
+    wa?.BackButton?.onClick?.(cb)
+    return () => {
+      wa?.BackButton?.offClick?.(cb)
+      wa?.BackButton?.hide?.()
+    }
+  }, [overlayOpen])
+
+  // ---- Menu actions ------------------------------------------------------
+
+  const onExportBackup = useCallback(async () => {
+    closeMenu()
+    const json = await exportAllNotes()
+    try {
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'todo-notes-backup.json'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      // best effort
+    }
+  }, [closeMenu])
+
+  const onImportClick = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  const onFileChosen = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      event.target.value = ''
+      if (!file) return
+      file
+        .text()
+        .then((text) => {
+          closeMenu()
+          setPendingImport(text)
+        })
+        .catch(() => {
+          // ignore unreadable file
+        })
+    },
+    [closeMenu]
+  )
+
+  const confirmImport = useCallback(async () => {
+    const text = pendingImport
+    setPendingImport(null)
+    if (text === null) return
+    const result = await importAllNotes(text)
+    if (result) onNotesReplaced(result)
+  }, [pendingImport, onNotesReplaced])
+
+  const onAddHome = useCallback(() => {
+    closeMenu()
+    window.Telegram?.WebApp?.addToHomeScreen?.()
+  }, [closeMenu])
+
+  const onDonate = useCallback(() => {
+    closeMenu()
+    if (DONATE_URL) {
+      window.open(DONATE_URL, '_blank')
+    } else {
+      // No invoice wired yet — point to the support note in Help.
+      onHelp()
+    }
+  }, [closeMenu, onHelp])
 
   // Reorder mode keeps Telegram vertical swipes disabled for the whole mode.
   useEffect(() => {
@@ -356,15 +463,108 @@ export default function NotesList({
     <main className="app">
       <div className="list-head">
         <h1 className="notes-head">Notes</h1>
-        <button
-          type="button"
-          className="help-btn"
-          aria-label="Help"
-          onClick={onHelp}
-        >
-          ?
-        </button>
+        <div className="head-actions">
+          <button
+            type="button"
+            className="help-btn"
+            aria-label="Help"
+            onClick={onHelp}
+          >
+            ?
+          </button>
+          <button
+            type="button"
+            className="help-btn"
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((m) => !m)}
+          >
+            ⋯
+          </button>
+        </div>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        style={{ display: 'none' }}
+        onChange={onFileChosen}
+      />
+
+      {menuOpen && (
+        <>
+          <div className="overlay" onClick={closeMenu} />
+          <div className="menu" role="menu">
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => setAboutOpen((a) => !a)}
+            >
+              About
+            </button>
+            {aboutOpen && (
+              <p className="menu-about">
+                To-Do Notes — a minimalist notes app for Telegram. In active
+                development. App v{APP_VERSION} (schema v{SCHEMA_VERSION}).
+                "Add to home screen" may not be available on every device.
+              </p>
+            )}
+            <button type="button" className="menu-item" onClick={onDonate}>
+              Donate ❤️
+            </button>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                closeMenu()
+                onHelp()
+              }}
+            >
+              Help
+            </button>
+            <button type="button" className="menu-item" onClick={onExportBackup}>
+              Export all notes (backup)
+            </button>
+            <button type="button" className="menu-item" onClick={onImportClick}>
+              Import all notes (restore)
+            </button>
+            <button type="button" className="menu-item" onClick={onAddHome}>
+              Add to home screen
+            </button>
+            {/* TODO: future product links / sections go here. */}
+            <p className="menu-about menu-more">More — coming soon.</p>
+          </div>
+        </>
+      )}
+
+      {pendingImport !== null && (
+        <>
+          <div className="overlay" onClick={() => setPendingImport(null)} />
+          <div className="menu" role="dialog" aria-label="Confirm import">
+            <p className="menu-about">
+              Replace ALL notes with the contents of this backup file? Your
+              current notes are backed up first, but this cannot be undone here.
+            </p>
+            <div className="panel-actions">
+              <button
+                type="button"
+                className="tool-btn"
+                onClick={() => setPendingImport(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="tool-btn"
+                onClick={confirmImport}
+              >
+                Replace
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <ul className={`list${reorderMode ? ' reorder' : ''}`} ref={listRef}>
         {notes.map((note) =>
@@ -434,7 +634,7 @@ export default function NotesList({
         <p className="empty">No notes yet — tap ➕ to create one.</p>
       )}
 
-      {!canCreate && <p className="notice">Note limit reached.</p>}
+      {limitMessage && <p className="notice">{limitMessage}</p>}
 
       <div className="toolbar">
         <span className="counter">

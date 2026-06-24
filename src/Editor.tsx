@@ -125,11 +125,25 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
   const onTitleChangeRef = useRef(onTitleChange)
   onTitleChangeRef.current = onTitleChange
 
+  // Per-note hydration guard: never persist before the note has loaded, so a
+  // transient empty editor can't overwrite stored content.
+  const loadedRef = useRef(false)
+  loadedRef.current = loaded
+
   const usedBytes = serializedBytes(rows)
   const lowStorage = MAX_VALUE_LENGTH - usedBytes <= 100
 
+  // The note is "empty" (single blank row) → show the writing hint on row 0.
+  const showWriteHint = rows.length === 1 && rows[0]?.text === ''
+
+  // Keep the focused row visible above the bottom button / keyboard.
+  const keepRowVisible = useCallback((id: string) => {
+    inputs.current.get(id)?.scrollIntoView({ block: 'nearest' })
+  }, [])
+
   // Persist the current note immediately and refresh its cached title.
   const flushNow = useCallback(() => {
+    if (!loadedRef.current) return
     void saveNoteContent(noteId, rowsRef.current)
     onTitleChangeRef.current(noteId, titleOf(rowsRef.current))
   }, [noteId])
@@ -160,8 +174,12 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
     let active = true
     loadNote(noteId).then((stored) => {
       if (!active) return
-      setRows(stored.length > 0 ? stored : [createRow()])
+      const next = stored.length > 0 ? stored : [createRow()]
+      setRows(next)
       setLoaded(true)
+      // Attempt to focus the first row (raises the keyboard on desktop; may
+      // not on mobile — the "Tap here to write" hint is the fallback there).
+      pendingFocus.current = { id: next[0].id, caretEnd: true }
     })
     return () => {
       active = false
@@ -205,6 +223,7 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
       const end = el.value.length
       el.setSelectionRange(end, end)
     }
+    el.scrollIntoView({ block: 'nearest' })
   }, [rows])
 
   useEffect(() => {
@@ -240,13 +259,17 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
     []
   )
 
-  const handleFocus = useCallback((id: string) => {
-    if (editBurstId.current !== null && editBurstId.current !== id) {
-      editBurstId.current = null
-    }
-    focusedIdRef.current = id
-    setFocusedId(id)
-  }, [])
+  const handleFocus = useCallback(
+    (id: string) => {
+      if (editBurstId.current !== null && editBurstId.current !== id) {
+        editBurstId.current = null
+      }
+      focusedIdRef.current = id
+      setFocusedId(id)
+      keepRowVisible(id)
+    },
+    [keepRowVisible]
+  )
 
   const handleBlur = useCallback((id: string) => {
     if (focusedIdRef.current === id) {
@@ -276,6 +299,8 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
       setLimitReached(false)
       setRows(candidate)
       autoGrow(event.target)
+      // Following the caret as the line wraps to a new visual line.
+      event.target.scrollIntoView({ block: 'nearest' })
     },
     [pushHistory]
   )
@@ -774,21 +799,53 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
   )
 
   return (
-    <main className="app">
-      <div className="editor-head">
+    <main className="app editor">
+      <div className="topbar">
         <button
           type="button"
-          className="back"
-          aria-label="Back to notes"
+          className="nav-btn"
+          aria-label="Back"
           onPointerDown={noFocusMouseDown}
           onClick={handleBack}
         >
           ←
         </button>
+        <button
+          type="button"
+          className="nav-btn"
+          aria-label="Undo"
+          disabled={undoCount === 0}
+          onPointerDown={noFocusMouseDown}
+          onClick={undo}
+        >
+          ↩️
+        </button>
+        <button
+          type="button"
+          className={`nav-btn${reorderMode ? ' active' : ''}`}
+          aria-label="Reorder"
+          aria-pressed={reorderMode}
+          onPointerDown={noFocusMouseDown}
+          onClick={() => setReorderMode((m) => !m)}
+        >
+          ↕️
+        </button>
+        <button
+          type="button"
+          className="nav-btn"
+          aria-label="Copy note as text"
+          onPointerDown={noFocusMouseDown}
+          onClick={onExport}
+        >
+          📋
+        </button>
+        <span className={`counter${lowStorage ? ' low' : ''}`}>
+          {usedBytes}/{MAX_VALUE_LENGTH} B
+        </span>
       </div>
 
       <ul className={`list${reorderMode ? ' reorder' : ''}`} ref={listRef}>
-        {rows.map((row) => (
+        {rows.map((row, index) => (
           <li
             className={`row${row.level === 1 ? ' sub' : ''}${
               draggingId === row.id ? ' dragging' : ''
@@ -829,6 +886,9 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
               rows={1}
               value={row.text}
               readOnly={reorderMode}
+              placeholder={
+                index === 0 && showWriteHint ? 'Tap here to write' : undefined
+              }
               onChange={(event) => handleChange(row.id, event)}
               onKeyDown={(event) => handleKeyDown(event, row.id)}
               onFocus={() => handleFocus(row.id)}
@@ -864,49 +924,17 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
       {copied && <div className="toast">Copied</div>}
 
       <div className="toolbar">
-        <span className={`counter${lowStorage ? ' low' : ''}`}>
-          {usedBytes}/{MAX_VALUE_LENGTH} B
-        </span>
-        <div className="cluster">
-          <button
-            type="button"
-            className="act"
-            aria-label="Undo"
-            disabled={undoCount === 0}
-            onPointerDown={noFocusMouseDown}
-            onClick={undo}
-          >
-            ↩️
-          </button>
-          <button
-            type="button"
-            className="act"
-            aria-label="Copy note as text"
-            onClick={onExport}
-          >
-            📋
-          </button>
-          <button
-            type="button"
-            className={`act${reorderMode ? ' active' : ''}`}
-            aria-label="Reorder mode"
-            aria-pressed={reorderMode}
-            onClick={() => setReorderMode((m) => !m)}
-          >
-            ↕️
-          </button>
-          <button
-            type="button"
-            className="act"
-            aria-label="Toggle checkbox on current line"
-            disabled={focusedId === null}
-            onPointerDown={(event) => event.preventDefault()}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={toggleFocusedCheckbox}
-          >
-            ✅
-          </button>
-        </div>
+        <button
+          type="button"
+          className="act"
+          aria-label="Toggle checkbox on current line"
+          disabled={focusedId === null}
+          onPointerDown={(event) => event.preventDefault()}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={toggleFocusedCheckbox}
+        >
+          ✅
+        </button>
       </div>
     </main>
   )
