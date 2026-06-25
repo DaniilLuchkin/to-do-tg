@@ -229,6 +229,9 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
     if (target.caretEnd) {
       const end = el.value.length
       el.setSelectionRange(end, end)
+    } else {
+      // Used by Enter-split: put the caret at the start of the new row.
+      el.setSelectionRange(0, 0)
     }
     el.scrollIntoView({ block: 'nearest' })
   }, [rows])
@@ -457,9 +460,19 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
       if (index === -1) return
 
       if (event.key === 'Enter' && !event.shiftKey) {
+        // Split the current row at the caret: text before stays, text after
+        // (any selection is dropped) moves to a new row of the same type/level.
         event.preventDefault()
-        const next = createRow(base[index].checkbox, base[index].level)
+        const el = event.currentTarget
+        const start = el.selectionStart
+        const end = el.selectionEnd
+        const cur = base[index]
+        const before = cur.text.slice(0, start)
+        const after = cur.text.slice(end)
+        const next = createRow(cur.checkbox, cur.level)
+        next.text = after
         const candidate = base.slice()
+        candidate[index] = { ...cur, text: before }
         candidate.splice(index + 1, 0, next)
         if (tooLong(candidate)) {
           setLimitReached(true)
@@ -469,6 +482,7 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
         closeBurst()
         setLimitReached(false)
         setRows(candidate)
+        // caretEnd:false → focus the new row with the caret at position 0.
         pendingFocus.current = { id: next.id, caretEnd: false }
         return
       }
@@ -895,6 +909,15 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
               onFocus={() => handleFocus(row.id)}
               onBlur={() => handleBlur(row.id)}
             />
+            {reorderMode && (
+              <IconButton
+                icon="close"
+                label="Delete line"
+                size={20}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => deleteRow(row.id)}
+              />
+            )}
           </li>
         ))}
         {draggingId !== null && dropLineTop !== null && (

@@ -375,21 +375,27 @@ export async function exportAllNotes(): Promise<string> {
   return JSON.stringify(file)
 }
 
+// Result of a whole-app import: the new index, or why it was refused.
+export type ImportOutcome =
+  | { ok: true; notes: NoteMeta[] }
+  | { ok: false; reason: 'invalid' | 'limit' }
+
 // Restore every note from a backup file (replaces everything). Auto-backs up
-// the current data first. Returns the new index, or null if the file is bad.
-export async function importAllNotes(json: string): Promise<NoteMeta[] | null> {
+// the current data first. Refuses an invalid file or one over the note cap.
+export async function importAllNotes(json: string): Promise<ImportOutcome> {
   let data: unknown
   try {
     data = JSON.parse(json)
   } catch {
-    return null
+    return { ok: false, reason: 'invalid' }
   }
   if (!isRecord(data) || !Array.isArray(data.idx) || !isRecord(data.notes)) {
-    return null
+    return { ok: false, reason: 'invalid' }
   }
   const notes = parseBackupNotes(data.idx)
   const contents = data.notes
-  if (notes.length === 0) return null
+  if (notes.length === 0) return { ok: false, reason: 'invalid' }
+  if (notes.length > MAX_NOTES) return { ok: false, reason: 'limit' }
 
   await backupAll()
 
@@ -407,5 +413,5 @@ export async function importAllNotes(json: string): Promise<NoteMeta[] | null> {
     if (typeof c === 'string') await kvSet(noteKey(n.id), c)
   }
   await kvSet(INDEX_KEY, serializeIndex(notes))
-  return notes
+  return { ok: true, notes }
 }

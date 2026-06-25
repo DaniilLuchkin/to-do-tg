@@ -15,6 +15,7 @@ export type IconName =
   | 'home'
   | 'ellipsis'
   | 'chevron-left'
+  | 'close'
 
 type IconProps = {
   name: IconName
@@ -138,6 +139,13 @@ export default function Icon({ name, size = 22 }: IconProps) {
       return (
         <svg {...common}>
           <polyline points="15 18 9 12 15 6" />
+        </svg>
+      )
+    case 'close':
+      return (
+        <svg {...common}>
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       )
   }

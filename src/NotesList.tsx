@@ -13,6 +13,7 @@ import {
   importAllNotes,
   APP_VERSION,
   SCHEMA_VERSION,
+  MAX_NOTES,
   type NoteMeta,
 } from './storage'
 
@@ -74,6 +75,7 @@ export default function NotesList({
   const [menuOpen, setMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [pendingImport, setPendingImport] = useState<string | null>(null)
+  const [importNotice, setImportNotice] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropLineTop, setDropLineTop] = useState<number | null>(null)
@@ -134,6 +136,7 @@ export default function NotesList({
   }, [closeMenu])
 
   const onImportClick = useCallback(() => {
+    setImportNotice(null)
     fileInputRef.current?.click()
   }, [])
 
@@ -160,7 +163,12 @@ export default function NotesList({
     setPendingImport(null)
     if (text === null) return
     const result = await importAllNotes(text)
-    if (result) onNotesReplaced(result)
+    if (result.ok) {
+      setImportNotice(null)
+      onNotesReplaced(result.notes)
+    } else if (result.reason === 'limit') {
+      setImportNotice(`Note limit reached (${MAX_NOTES})`)
+    }
   }, [pendingImport, onNotesReplaced])
 
   const onAddHome = useCallback(() => {
@@ -470,7 +478,7 @@ export default function NotesList({
         <div className="head-left">
           <h1 className="title">Notes</h1>
           <span className="caption">
-            {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+            {notes.length}/{MAX_NOTES}
           </span>
         </div>
         <div className="head-actions">
@@ -653,6 +661,15 @@ export default function NotesList({
                   <span className="muted">New note</span>
                 )}
               </button>
+              {reorderMode && (
+                <IconButton
+                  icon="close"
+                  label="Delete note"
+                  size={20}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => setConfirmingId(note.id)}
+                />
+              )}
             </li>
           )
         )}
@@ -666,6 +683,8 @@ export default function NotesList({
       )}
 
       {limitMessage && <p className="notice">{limitMessage}</p>}
+
+      {importNotice && <p className="notice">{importNotice}</p>}
 
       <div className="toolbar">
         <IconButton
