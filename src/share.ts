@@ -56,6 +56,8 @@ export function buildShareDeepLink(rows: Row[]): string | null {
   return `${SHARE_LINK_BASE}?startapp=${param}`
 }
 
+const APP_NAME = 'To-Do Notes'
+
 function openTelegramShare(url: string): void {
   const wa = window.Telegram?.WebApp
   if (wa?.openTelegramLink) wa.openTelegramLink(url)
@@ -63,13 +65,24 @@ function openTelegramShare(url: string): void {
 }
 
 // Share a note: a deep link when it's small enough (and configured), else the
-// note's plain text. Both open Telegram's share sheet to pick a chat.
+// note's plain text. Both open Telegram's share sheet to pick a chat. Plain
+// text carries a "Made with To-Do Notes" footer + the app link so recipients
+// know where it came from (the deep-link case already includes the link).
 export function shareNote(rows: Row[]): void {
   const link = buildShareDeepLink(rows)
-  const url = link
-    ? `https://t.me/share/url?url=${encodeURIComponent(link)}` +
-      `&text=${encodeURIComponent(titleOf(rows) || 'To-Do note')}`
-    : `https://t.me/share/url?url=${encodeURIComponent(rowsToText(rows))}`
+  if (link) {
+    const text = titleOf(rows) || APP_NAME
+    openTelegramShare(
+      `https://t.me/share/url?url=${encodeURIComponent(link)}` +
+        `&text=${encodeURIComponent(text)}`
+    )
+    return
+  }
+  const body = `${rowsToText(rows)}\n\nMade with ${APP_NAME}`
+  const url = SHARE_LINK_BASE
+    ? `https://t.me/share/url?url=${encodeURIComponent(SHARE_LINK_BASE)}` +
+      `&text=${encodeURIComponent(body)}`
+    : `https://t.me/share/url?url=${encodeURIComponent(body)}`
   openTelegramShare(url)
 }
 
