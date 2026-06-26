@@ -12,10 +12,9 @@ import {
 // shared as plain text instead.
 export const MAX_START_PARAM = 512
 
-// Your Mini App's public deep-link base, e.g. 'https://t.me/YourBot/notes'.
-// Leave empty to share everything as plain text. Set this (and redeploy) to
-// enable link-sharing of small notes.
-export const SHARE_LINK_BASE = ''
+// Your Mini App's public deep-link base. `?startapp=<payload>` opens the bot's
+// main Mini App. Leave empty to share everything as plain text.
+export const SHARE_LINK_BASE = 'https://t.me/todolistwebapp_bot'
 
 // ---- base64url (no padding) — native btoa/atob, no dependencies -----------
 function bytesToBase64url(bytes: Uint8Array): string {
