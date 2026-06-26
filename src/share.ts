@@ -16,32 +16,41 @@ export const MAX_START_PARAM = 512
 // main Mini App. Leave empty to share everything as plain text.
 export const SHARE_LINK_BASE = 'https://t.me/todolistwebapp_bot'
 
-// ---- base64url (no padding) — native btoa/atob, no dependencies -----------
-function bytesToBase64url(bytes: Uint8Array): string {
+// ---- Symmetric base64url + UTF-8 (native btoa/atob, no dependencies) -------
+// Used by BOTH the share-encode and receive-decode paths so they round-trip,
+// including non-Latin text (e.g. Cyrillic) via TextEncoder/TextDecoder.
+function b64urlEncode(str: string): string {
+  const bytes = new TextEncoder().encode(str)
   let bin = ''
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+  bytes.forEach((b) => {
+    bin += String.fromCharCode(b)
+  })
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-function base64urlToBytes(value: string): Uint8Array {
-  const pad = (4 - (value.length % 4)) % 4
-  const b64 = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(pad)
-  const bin = atob(b64)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
+function b64urlDecode(s: string): string {
+  let t = s.replace(/-/g, '+').replace(/_/g, '/')
+  while (t.length % 4) t += '=' // restore padding
+  const bin = atob(t)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new TextDecoder().decode(bytes)
 }
+
+// A valid startapp payload is base64url only — reject anything else up front.
+const SHARE_PARAM_RE = /^[A-Za-z0-9_-]+$/
 
 // Encode a note's rows into a base64url deep-link payload.
 export function encodeNote(rows: Row[]): string {
-  return bytesToBase64url(new TextEncoder().encode(serialize(rows)))
+  return b64urlEncode(serialize(rows))
 }
 
-// Decode a shared `startapp` payload back into rows, or null if unusable.
-export function decodeSharedParam(param: string): Row[] | null {
+// Parse an incoming `startapp` payload into rows. Returns null for anything
+// unusable (bad charset, decode failure, or not a valid note) — never throws.
+export function parseSharedNote(param: string): Row[] | null {
+  if (!SHARE_PARAM_RE.test(param)) return null
   try {
-    const json = new TextDecoder().decode(base64urlToBytes(param))
-    const rows = deserialize(json)
+    const rows = deserialize(b64urlDecode(param))
     return rows.length > 0 ? rows : null
   } catch {
     return null
