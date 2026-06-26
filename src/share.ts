@@ -64,10 +64,21 @@ function openTelegramShare(url: string): void {
   else window.open(url, '_blank')
 }
 
+// The bot's @username, derived from the link base — Telegram auto-links it as
+// a tappable mention in a shared message. Empty when unconfigured.
+function botHandle(base: string): string {
+  try {
+    const seg = new URL(base).pathname.split('/').filter(Boolean)[0]
+    return seg ? `@${seg}` : ''
+  } catch {
+    return ''
+  }
+}
+
 // Share a note: a deep link when it's small enough (and configured), else the
 // note's plain text. Both open Telegram's share sheet to pick a chat. Plain
-// text carries a "Made with To-Do Notes" footer + the app link so recipients
-// know where it came from (the deep-link case already includes the link).
+// text carries a "Made with To-Do Notes (@bot)" footer — the tappable @handle
+// lets recipients open the app (the deep-link case already includes the link).
 export function shareNote(rows: Row[]): void {
   const link = buildShareDeepLink(rows)
   if (link) {
@@ -78,12 +89,10 @@ export function shareNote(rows: Row[]): void {
     )
     return
   }
-  const body = `${rowsToText(rows)}\n\nMade with ${APP_NAME}`
-  const url = SHARE_LINK_BASE
-    ? `https://t.me/share/url?url=${encodeURIComponent(SHARE_LINK_BASE)}` +
-      `&text=${encodeURIComponent(body)}`
-    : `https://t.me/share/url?url=${encodeURIComponent(body)}`
-  openTelegramShare(url)
+  const handle = botHandle(SHARE_LINK_BASE)
+  const footer = handle ? `Made with ${APP_NAME} (${handle})` : `Made with ${APP_NAME}`
+  const body = `${rowsToText(rows)}\n\n${footer}`
+  openTelegramShare(`https://t.me/share/url?url=${encodeURIComponent(body)}`)
 }
 
 // Read the shared payload from Telegram's start_param, falling back to the
