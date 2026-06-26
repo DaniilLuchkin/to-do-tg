@@ -175,14 +175,19 @@ export function kvGet(key: string): Promise<string | null> {
   if (cloud) {
     return new Promise((resolve) => {
       try {
-        cloud.getItem(key, (error, value) => resolve(error ? null : value))
+        // Telegram's CloudStorage returns "" (not null) for a missing key —
+        // normalize empty/error to null so callers see "no value", never an
+        // empty string that would fail to parse.
+        cloud.getItem(key, (error, value) =>
+          resolve(error || !value ? null : value)
+        )
       } catch {
         resolve(null)
       }
     })
   }
   try {
-    return Promise.resolve(localStorage.getItem(key))
+    return Promise.resolve(localStorage.getItem(key) || null)
   } catch {
     return Promise.resolve(null)
   }
@@ -317,7 +322,9 @@ export type InitResult = {
 export async function initNotes(): Promise<InitResult> {
   const idxRaw = await kvGet(INDEX_KEY)
 
-  if (idxRaw === null) {
+  // Treat a missing OR empty index as "no index yet" (fresh install / not
+  // synced), never as corrupt — CloudStorage yields "" for absent keys.
+  if (!idxRaw || idxRaw.trim() === '') {
     // Legacy migration: old single "todos" list → first note.
     const old = await kvGet(OLD_KEY)
     if (old !== null) {
