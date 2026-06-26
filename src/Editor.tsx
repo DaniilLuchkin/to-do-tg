@@ -19,6 +19,7 @@ import {
   MAX_VALUE_BYTES,
   type Row,
 } from './storage'
+import { shareNote } from './share'
 
 // When Telegram's BackButton exists, rely on it (no duplicate in-app back).
 const HAS_BACK_BUTTON = !!window.Telegram?.WebApp?.BackButton
@@ -813,6 +814,11 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
     setPanel('none')
   }, [])
 
+  // Share the note: a deep link when it's small enough, else its plain text.
+  const onShare = useCallback(() => {
+    shareNote(rowsRef.current)
+  }, [])
+
   const noFocusMouseDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -852,6 +858,12 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
             label="Copy note as text"
             onPointerDown={noFocusMouseDown}
             onClick={onExport}
+          />
+          <IconButton
+            icon="share"
+            label="Share note"
+            onPointerDown={noFocusMouseDown}
+            onClick={onShare}
           />
         </div>
         <span className={`caption counter${lowStorage ? ' low' : ''}`}>

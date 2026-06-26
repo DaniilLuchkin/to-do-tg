@@ -16,6 +16,7 @@ export type IconName =
   | 'ellipsis'
   | 'chevron-left'
   | 'close'
+  | 'share'
 
 type IconProps = {
   name: IconName
@@ -146,6 +147,16 @@ export default function Icon({ name, size = 22 }: IconProps) {
         <svg {...common}>
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      )
+    case 'share':
+      return (
+        <svg {...common}>
+          <circle cx="18" cy="5" r="3" />
+          <circle cx="6" cy="12" r="3" />
+          <circle cx="18" cy="19" r="3" />
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
         </svg>
       )
   }

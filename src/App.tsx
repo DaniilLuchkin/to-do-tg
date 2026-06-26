@@ -10,11 +10,13 @@ import {
   serializeIndex,
   bytesOf,
   newId,
+  titleOf,
   MAX_VALUE_BYTES,
   MAX_NOTES,
   type NoteMeta,
   type Row,
 } from './storage'
+import { decodeSharedParam, readStartParam } from './share'
 
 type View = 'list' | 'editor' | 'help'
 
@@ -24,6 +26,8 @@ export default function App() {
   const [error, setError] = useState<'corrupt' | 'future' | null>(null)
   const [view, setView] = useState<View>('list')
   const [currentId, setCurrentId] = useState<string | null>(null)
+  // A note opened via a share link, awaiting the user's "save" confirmation.
+  const [incoming, setIncoming] = useState<Row[] | null>(null)
 
   const notesRef = useRef<NoteMeta[]>(notes)
   notesRef.current = notes
@@ -40,6 +44,12 @@ export default function App() {
         setError(res.error)
       } else {
         hydrated.current = true
+        // A note shared via deep link → offer to save it (once data is safe).
+        const param = readStartParam()
+        if (param) {
+          const rows = decodeSharedParam(param)
+          if (rows) setIncoming(rows)
+        }
       }
       setLoaded(true)
     })
@@ -123,6 +133,29 @@ export default function App() {
     void saveIndex(next)
   }, [])
 
+  const dismissShared = useCallback(() => setIncoming(null), [])
+
+  // Save a shared note as a new note (fresh ids), respecting the 50-note cap.
+  const saveShared = useCallback(async () => {
+    if (!hydrated.current) return
+    const rows = incoming
+    if (!rows) return
+    if (notesRef.current.length >= MAX_NOTES) return
+    const id = newId()
+    const fresh: Row[] = rows.map((r) => ({ ...r, id: newId() }))
+    const next: NoteMeta[] = [
+      ...notesRef.current,
+      { id, title: titleOf(fresh), mtime: Date.now() },
+    ]
+    if (bytesOf(serializeIndex(next)) > MAX_VALUE_BYTES) return
+    await saveNoteContent(id, fresh)
+    setNotes(next)
+    await saveIndex(next)
+    setIncoming(null)
+    setCurrentId(id)
+    setView('editor')
+  }, [incoming])
+
   // After a whole-app backup import (storage already written).
   const onNotesReplaced = useCallback((next: NoteMeta[]) => {
     setNotes(next)
@@ -161,16 +194,44 @@ export default function App() {
   }
 
   return (
-    <NotesList
-      notes={notes}
-      canCreate={canCreate}
-      limitMessage={limitMessage}
-      onOpen={openNote}
-      onCreate={createNote}
-      onDelete={deleteNote}
-      onReorder={reorderNotes}
-      onHelp={openHelp}
-      onNotesReplaced={onNotesReplaced}
-    />
+    <>
+      <NotesList
+        notes={notes}
+        canCreate={canCreate}
+        limitMessage={limitMessage}
+        onOpen={openNote}
+        onCreate={createNote}
+        onDelete={deleteNote}
+        onReorder={reorderNotes}
+        onHelp={openHelp}
+        onNotesReplaced={onNotesReplaced}
+      />
+
+      {incoming && (
+        <>
+          <div className="scrim" onClick={dismissShared} />
+          <div className="sheet" role="dialog" aria-label="Save shared note">
+            <p className="sheet-text">
+              {atNoteCap
+                ? `Someone shared a note with you, but you're at the ${MAX_NOTES}-note limit. Delete a note to make room, then reopen the link.`
+                : 'Someone shared a note with you. Save it to your notes?'}
+            </p>
+            <div className="sheet-actions">
+              <button type="button" className="btn" onClick={dismissShared}>
+                Dismiss
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={atNoteCap}
+                onClick={saveShared}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   )
 }

@@ -86,6 +86,21 @@ export default function Help({ onClose }: HelpProps) {
       </section>
 
       <section className="help-section">
+        <h2>Sharing</h2>
+        <ul>
+          <li>
+            Tap the share icon in a note to send it to a Telegram chat. Small
+            notes go as a link the other person can open and save here; longer
+            notes are shared as plain text.
+          </li>
+          <li>
+            Open someone's shared link and To-Do Notes offers to save it as a
+            new note (up to the 50-note limit).
+          </li>
+        </ul>
+      </section>
+
+      <section className="help-section">
         <h2>Your data</h2>
         <ul>
           <li>
