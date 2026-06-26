@@ -104,13 +104,23 @@ export function shareNote(rows: Row[]): void {
   openTelegramShare(`https://t.me/share/url?url=${encodeURIComponent(body)}`)
 }
 
-// Read the shared payload from Telegram's start_param, falling back to the
-// `startapp` query param so it also works in the browser preview.
+// Read the shared payload. Primary source is Telegram's parsed
+// initDataUnsafe.start_param; we also check the launch URL directly —
+// Telegram puts it in the hash as `tgWebAppStartParam`, and `?startapp=`
+// covers the plain browser preview — so it's caught even if the SDK field
+// hasn't populated.
 export function readStartParam(): string | null {
   const fromTelegram = window.Telegram?.WebApp?.initDataUnsafe?.start_param
   if (fromTelegram) return fromTelegram
   try {
-    return new URLSearchParams(window.location.search).get('startapp')
+    const search = new URLSearchParams(window.location.search)
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    return (
+      search.get('startapp') ||
+      search.get('tgWebAppStartParam') ||
+      hash.get('tgWebAppStartParam') ||
+      null
+    )
   } catch {
     return null
   }
