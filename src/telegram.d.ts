@@ -40,12 +40,18 @@ interface TelegramBackButton {
   offClick?(callback: () => void): void
 }
 
+interface TelegramInitDataUnsafe {
+  start_param?: string
+}
+
 interface TelegramWebApp {
   ready(): void
   expand?(): void
   initData: string
+  initDataUnsafe?: TelegramInitDataUnsafe
   colorScheme: 'light' | 'dark'
   themeParams: TelegramThemeParams
+  openTelegramLink?(url: string): void
   CloudStorage?: TelegramCloudStorage
   HapticFeedback?: TelegramHapticFeedback
   BackButton?: TelegramBackButton
