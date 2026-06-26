@@ -16,7 +16,7 @@ import {
   type NoteMeta,
   type Row,
 } from './storage'
-import { decodeSharedParam, readStartParam } from './share'
+import { parseSharedNote, readStartParam } from './share'
 
 type View = 'list' | 'editor' | 'help'
 
@@ -36,23 +36,44 @@ export default function App() {
 
   useEffect(() => {
     let active = true
-    initNotes().then((res) => {
-      if (!active) return
-      setNotes(res.notes)
-      if (res.error) {
-        // Preserve-and-bail: surface an error, never write over the data.
-        setError(res.error)
-      } else {
+    void (async () => {
+      // 1) Load notes from storage in its OWN try/catch. ONLY a genuine
+      //    storage read failure may surface the "Couldn't read your notes"
+      //    screen — never share-link parsing.
+      try {
+        const res = await initNotes()
+        if (!active) return
+        setNotes(res.notes)
+        if (res.error) {
+          // Preserve-and-bail: surface an error, never write over the data.
+          setError(res.error)
+          setLoaded(true)
+          return
+        }
         hydrated.current = true
-        // A note shared via deep link → offer to save it (once data is safe).
+        setLoaded(true)
+      } catch {
+        if (active) {
+          setError('corrupt')
+          setLoaded(true)
+        }
+        return
+      }
+
+      // 2) SEPARATELY, after successful hydration, handle an incoming shared
+      //    note. Fully isolated: any failure here is ignored and the user
+      //    just lands on their normal list — it never sets the error state.
+      if (!active) return
+      try {
         const param = readStartParam()
         if (param) {
-          const rows = decodeSharedParam(param)
+          const rows = parseSharedNote(param)
           if (rows) setIncoming(rows)
         }
+      } catch {
+        // Bad/garbled share param — proceed to the normal notes list.
       }
-      setLoaded(true)
-    })
+    })()
     return () => {
       active = false
     }
