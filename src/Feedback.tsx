@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Icon from './Icon'
 import IconButton from './IconButton'
+import Sheet from './Sheet'
 import { CONFIG } from './config'
 
 type FeedbackProps = {
@@ -16,20 +17,6 @@ function openTelegram(url: string): void {
 export default function Feedback({ onClose }: FeedbackProps) {
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
-
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
-
-  useEffect(() => {
-    const wa = window.Telegram?.WebApp
-    wa?.BackButton?.show?.()
-    const cb = () => onCloseRef.current()
-    wa?.BackButton?.onClick?.(cb)
-    return () => {
-      wa?.BackButton?.offClick?.(cb)
-      wa?.BackButton?.hide?.()
-    }
-  }, [])
 
   useEffect(() => {
     return () => window.clearTimeout(toastTimer.current)
@@ -57,8 +44,7 @@ export default function Feedback({ onClose }: FeedbackProps) {
 
   return (
     <>
-      <div className="scrim" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-label="Send feedback">
+      <Sheet onClose={onClose} ariaLabel="Send feedback">
         <p className="sheet-title">Send feedback</p>
         <p className="sheet-text">
           Found a bug or have an idea? I'd love to hear it.
@@ -101,7 +87,7 @@ export default function Feedback({ onClose }: FeedbackProps) {
             Close
           </button>
         </div>
-      </div>
+      </Sheet>
 
       {toast && <div className="toast">{toast}</div>}
     </>
