@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Editor from './Editor'
 import NotesList from './NotesList'
 import Help from './Help'
 import Donate from './Donate'
+import Sheet from './Sheet'
 import {
   initNotes,
   saveIndex,
@@ -81,13 +82,18 @@ export default function App() {
   }, [])
 
   const atNoteCap = notes.length >= MAX_NOTES
-  const idxFits =
-    bytesOf(
-      serializeIndex([
-        ...notes,
-        { id: 'zzzzz00', title: '', mtime: Date.now() },
-      ])
-    ) <= MAX_VALUE_BYTES
+  // Whether one more index entry would still fit CloudStorage's per-value cap.
+  // Recomputed only when the notes change, not on every render.
+  const idxFits = useMemo(
+    () =>
+      bytesOf(
+        serializeIndex([
+          ...notes,
+          { id: 'zzzzz00', title: '', mtime: Date.now() },
+        ])
+      ) <= MAX_VALUE_BYTES,
+    [notes]
+  )
   const canCreate = !atNoteCap && idxFits
   const limitMessage = atNoteCap
     ? `Note limit reached (${MAX_NOTES}).`
@@ -241,29 +247,26 @@ export default function App() {
       />
 
       {incoming && (
-        <>
-          <div className="scrim" onClick={dismissShared} />
-          <div className="sheet" role="dialog" aria-label="Save shared note">
-            <p className="sheet-text">
-              {atNoteCap
-                ? `Someone shared a note with you, but you're at the ${MAX_NOTES}-note limit. Delete a note to make room, then reopen the link.`
-                : 'Someone shared a note with you. Save it to your notes?'}
-            </p>
-            <div className="sheet-actions">
-              <button type="button" className="btn" onClick={dismissShared}>
-                Dismiss
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={atNoteCap}
-                onClick={saveShared}
-              >
-                Save
-              </button>
-            </div>
+        <Sheet onClose={dismissShared} ariaLabel="Save shared note">
+          <p className="sheet-text">
+            {atNoteCap
+              ? `Someone shared a note with you, but you're at the ${MAX_NOTES}-note limit. Delete a note to make room, then reopen the link.`
+              : 'Someone shared a note with you. Save it to your notes?'}
+          </p>
+          <div className="sheet-actions">
+            <button type="button" className="btn" onClick={dismissShared}>
+              Dismiss
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={atNoteCap}
+              onClick={saveShared}
+            >
+              Save
+            </button>
           </div>
-        </>
+        </Sheet>
       )}
     </>
   )

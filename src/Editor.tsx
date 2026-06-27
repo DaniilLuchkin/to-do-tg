@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -20,21 +21,14 @@ import {
   type Row,
 } from './storage'
 import { shareNote } from './share'
-import {
-  HAS_BACK_BUTTON,
-  hapticLight,
-  hapticMedium,
-  beginDragLock,
-  endDragLock,
-} from './telegram-ui'
+import { HAS_BACK_BUTTON, hapticLight, hapticMedium } from './telegram-ui'
+import { useRowGestures, SWIPE_DELETE_PX } from './useRowGestures'
 
 // Per-note byte cap.
 const MAX_VALUE_LENGTH = MAX_VALUE_BYTES
 
 // Horizontal travel (px) a swipe must exceed to commit an indent/outdent.
 const SWIPE_COMMIT_PX = 48
-// Left-swipe distance (px) beyond which release deletes the row.
-const SWIPE_DELETE_PX = 120
 
 // Cap on the in-memory undo history.
 const MAX_HISTORY = 100
@@ -57,20 +51,6 @@ function autoGrow(el: HTMLTextAreaElement): void {
   el.style.height = `${el.scrollHeight}px`
 }
 
-type Gesture = {
-  pointerId: number
-  rowId: string
-  startX: number
-  startY: number
-  mode: 'pending' | 'horizontal' | 'vertical'
-}
-
-type Drag = {
-  pointerId: number
-  rowId: string
-  startIndex: number
-}
-
 type EditorProps = {
   noteId: string
   onBack: () => void
@@ -84,8 +64,6 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [undoCount, setUndoCount] = useState(0)
   const [reorderMode, setReorderMode] = useState(false)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [dropLineTop, setDropLineTop] = useState<number | null>(null)
   const [panel, setPanel] = useState<'none' | 'export'>('none')
   const [exportValue, setExportValue] = useState('')
   const [copied, setCopied] = useState(false)
@@ -97,12 +75,7 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
   reorderModeRef.current = reorderMode
 
   const inputs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
-  const rowEls = useRef<Map<string, HTMLLIElement>>(new Map())
-  const listRef = useRef<HTMLUListElement | null>(null)
   const exportRef = useRef<HTMLTextAreaElement | null>(null)
-
-  const gesture = useRef<Gesture | null>(null)
-  const drag = useRef<Drag | null>(null)
   const pendingFocus = useRef<{ id: string; caretEnd: boolean } | null>(null)
 
   // In-memory undo history (deep copies) — per note; resets on remount.
@@ -120,7 +93,7 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
   const loadedRef = useRef(false)
   loadedRef.current = loaded
 
-  const usedBytes = serializedBytes(rows)
+  const usedBytes = useMemo(() => serializedBytes(rows), [rows])
   const lowStorage = MAX_VALUE_LENGTH - usedBytes <= 100
 
   // The note is "empty" (single blank row) → show the writing hint on row 0.
@@ -241,14 +214,6 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
       } else {
         inputs.current.delete(id)
       }
-    },
-    []
-  )
-
-  const registerRow = useCallback(
-    (id: string) => (el: HTMLLIElement | null) => {
-      if (el) rowEls.current.set(id, el)
-      else rowEls.current.delete(id)
     },
     []
   )
@@ -504,273 +469,34 @@ export default function Editor({ noteId, onBack, onTitleChange }: EditorProps) {
     [pushHistory, closeBurst]
   )
 
-  // ---- Horizontal swipe (indent / outdent / delete) ----------------------
-
-  const resetRowTransform = useCallback((rowId: string) => {
-    const el = rowEls.current.get(rowId)
-    if (!el) return
-    el.style.transition = 'transform 120ms ease'
-    el.style.transform = 'translateX(0)'
-    el.classList.remove('will-delete')
-  }, [])
-
-  const swipeDown = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>, id: string) => {
-      if (event.target instanceof Element && event.target.closest('.checkbox')) {
-        return
-      }
-      gesture.current = {
-        pointerId: event.pointerId,
-        rowId: id,
-        startX: event.clientX,
-        startY: event.clientY,
-        mode: 'pending',
-      }
-    },
-    []
-  )
-
-  const swipeMove = useCallback((event: ReactPointerEvent<HTMLLIElement>) => {
-    const g = gesture.current
-    if (!g || g.pointerId !== event.pointerId) return
-    const dx = event.clientX - g.startX
-    const dy = event.clientY - g.startY
-
-    if (g.mode === 'pending') {
-      if (Math.abs(dy) > Math.abs(dx)) {
-        g.mode = 'vertical'
-        return
-      }
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
-        g.mode = 'horizontal'
-        const el = rowEls.current.get(g.rowId)
-        if (el) {
-          el.style.transition = ''
-          try {
-            el.setPointerCapture(event.pointerId)
-          } catch {
-            // ignore
-          }
-        }
-      } else {
-        return
-      }
-    }
-
-    if (g.mode === 'horizontal') {
-      event.preventDefault()
-      const el = rowEls.current.get(g.rowId)
-      if (el) {
-        const damped = Math.max(-56, Math.min(56, dx * 0.4))
-        el.style.transform = `translateX(${damped}px)`
-        if (dx < -SWIPE_DELETE_PX) el.classList.add('will-delete')
-        else el.classList.remove('will-delete')
-      }
-    }
-  }, [])
-
-  const swipeUp = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const g = gesture.current
-      if (!g || g.pointerId !== event.pointerId) return
-      gesture.current = null
-      const el = rowEls.current.get(g.rowId)
-      if (el) {
-        try {
-          el.releasePointerCapture(event.pointerId)
-        } catch {
-          // ignore
-        }
-      }
-      resetRowTransform(g.rowId)
-      if (g.mode === 'horizontal') {
-        const dx = event.clientX - g.startX
-        if (dx > SWIPE_COMMIT_PX) indentRow(g.rowId)
-        else if (dx < -SWIPE_DELETE_PX) deleteRow(g.rowId)
-        else if (dx < -SWIPE_COMMIT_PX) outdentRow(g.rowId)
-      }
-    },
-    [indentRow, outdentRow, deleteRow, resetRowTransform]
-  )
-
-  const swipeCancel = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const g = gesture.current
-      if (!g || g.pointerId !== event.pointerId) return
-      gesture.current = null
-      const el = rowEls.current.get(g.rowId)
-      if (el) {
-        try {
-          el.releasePointerCapture(event.pointerId)
-        } catch {
-          // ignore
-        }
-      }
-      resetRowTransform(g.rowId)
-    },
-    [resetRowTransform]
-  )
-
-  // ---- Drag to reorder ---------------------------------------------------
-
-  const dropIndexAmongOthers = useCallback(
-    (draggedId: string, clientY: number) => {
-      let idx = 0
-      for (const r of rowsRef.current) {
-        if (r.id === draggedId) continue
-        const el = rowEls.current.get(r.id)
-        if (!el) continue
-        const rect = el.getBoundingClientRect()
-        if (clientY > rect.top + rect.height / 2) idx++
-      }
-      return idx
-    },
-    []
-  )
-
-  const updateDropLine = useCallback(
-    (draggedId: string, clientY: number) => {
-      const others = rowsRef.current.filter((r) => r.id !== draggedId)
-      const listEl = listRef.current
-      if (others.length === 0 || !listEl) {
-        setDropLineTop(null)
-        return
-      }
-      const idx = dropIndexAmongOthers(draggedId, clientY)
-      const listTop = listEl.getBoundingClientRect().top
-      let top: number
-      if (idx < others.length) {
-        const el = rowEls.current.get(others[idx].id)
-        top = el ? el.getBoundingClientRect().top - listTop : 0
-      } else {
-        const el = rowEls.current.get(others[others.length - 1].id)
-        top = el ? el.getBoundingClientRect().bottom - listTop : 0
-      }
-      setDropLineTop(top)
-    },
-    [dropIndexAmongOthers]
-  )
-
-  const startDrag = useCallback(
-    (event: ReactPointerEvent<HTMLElement>, id: string) => {
-      const startIndex = rowsRef.current.findIndex((r) => r.id === id)
-      if (startIndex === -1) return
-      drag.current = { pointerId: event.pointerId, rowId: id, startIndex }
-      beginDragLock()
-      const el = rowEls.current.get(id)
-      try {
-        el?.setPointerCapture(event.pointerId)
-      } catch {
-        // ignore
-      }
-      setDraggingId(id)
-      updateDropLine(id, event.clientY)
-    },
-    [updateDropLine]
-  )
-
-  const finishDrag = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const d = drag.current
-      if (!d) return
-      drag.current = null
-      const el = rowEls.current.get(d.rowId)
-      try {
-        el?.releasePointerCapture(event.pointerId)
-      } catch {
-        // ignore
-      }
-      endDragLock()
-      setDraggingId(null)
-      setDropLineTop(null)
-
-      const base = rowsRef.current
-      const newIndex = dropIndexAmongOthers(d.rowId, event.clientY)
-      if (newIndex === d.startIndex) return
-      const dragged = base.find((r) => r.id === d.rowId)
-      if (!dragged) return
+  // Drag-to-reorder + swipe (right = indent, short-left = outdent,
+  // far-left = delete), shared with the notes list.
+  const {
+    draggingId,
+    dropLineTop,
+    listRef,
+    registerRow,
+    onRowPointerDown,
+    onRowPointerMove,
+    onRowPointerUp,
+    onRowPointerCancel,
+    onHandlePointerDown,
+  } = useRowGestures<Row>({
+    itemsRef: rowsRef,
+    reorderModeRef,
+    onReorder: (arr) => {
       pushHistory()
       closeBurst()
-      const arr = base.filter((r) => r.id !== d.rowId)
-      arr.splice(newIndex, 0, dragged)
       setRows(arr)
-      hapticLight()
     },
-    [dropIndexAmongOthers, pushHistory, closeBurst]
-  )
-
-  const cancelDrag = useCallback((event: ReactPointerEvent<HTMLLIElement>) => {
-    const d = drag.current
-    drag.current = null
-    if (d) {
-      const el = rowEls.current.get(d.rowId)
-      try {
-        el?.releasePointerCapture(event.pointerId)
-      } catch {
-        // ignore
-      }
-    }
-    endDragLock()
-    setDraggingId(null)
-    setDropLineTop(null)
-  }, [])
-
-  const onRowPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>, id: string) => {
-      if (reorderModeRef.current) {
-        startDrag(event, id)
-        return
-      }
-      swipeDown(event, id)
+    swipeIgnoreSelector: '.checkbox',
+    swipeClampMax: 56,
+    onSwipeCommit: (id, dx) => {
+      if (dx > SWIPE_COMMIT_PX) indentRow(id)
+      else if (dx < -SWIPE_DELETE_PX) deleteRow(id)
+      else if (dx < -SWIPE_COMMIT_PX) outdentRow(id)
     },
-    [startDrag, swipeDown]
-  )
-
-  const onRowPointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const d = drag.current
-      if (d && d.pointerId === event.pointerId) {
-        event.preventDefault()
-        updateDropLine(d.rowId, event.clientY)
-        return
-      }
-      swipeMove(event)
-    },
-    [updateDropLine, swipeMove]
-  )
-
-  const onRowPointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const d = drag.current
-      if (d && d.pointerId === event.pointerId) {
-        finishDrag(event)
-        return
-      }
-      swipeUp(event)
-    },
-    [finishDrag, swipeUp]
-  )
-
-  const onRowPointerCancel = useCallback(
-    (event: ReactPointerEvent<HTMLLIElement>) => {
-      const d = drag.current
-      if (d && d.pointerId === event.pointerId) {
-        cancelDrag(event)
-        return
-      }
-      swipeCancel(event)
-    },
-    [cancelDrag, swipeCancel]
-  )
-
-  const onHandlePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLElement>, id: string) => {
-      event.stopPropagation()
-      startDrag(event, id)
-    },
-    [startDrag]
-  )
-
+  })
   // ---- Export ------------------------------------------------------------
 
   const showCopied = useCallback(() => {
