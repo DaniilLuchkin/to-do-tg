@@ -74,9 +74,10 @@ body {
   padding-right: calc(var(--s-4) + var(--sa-right));
 }
 
-/* Editor / help screens clear the fixed top bar and the bottom button. */
+/* Editor / help / donate screens clear the fixed top bar and the bottom button. */
 .app.editor,
-.app.help {
+.app.help,
+.app.donate {
   padding-top: calc(var(--bar-h) + var(--sa-top) + var(--s-2));
 }
 
@@ -232,6 +233,9 @@ body {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
+  /* Scroll if the (now longer) menu is taller than the viewport. */
+  max-height: calc(100vh - 72px - var(--sa-top) - var(--sa-bottom));
+  overflow-y: auto;
   animation: menuIn 140ms ease;
 }
 
@@ -721,4 +725,171 @@ body {
 .help-section li {
   margin: 0 0 var(--s-2);
   line-height: 1.5;
+}
+
+/* ----------------------------------------------------------------------------
+   Donate view
+---------------------------------------------------------------------------- */
+.donate-title {
+  margin: 0 0 var(--s-4);
+}
+
+.donate-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-6);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.donate-heart {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.donate-section {
+  margin: 0 0 var(--s-6);
+}
+
+.donate-h2 {
+  margin: 0 0 var(--s-3);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--hint);
+}
+
+.star-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.star-tier {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--s-3);
+}
+
+.star-tier-label {
+  font-weight: 600;
+}
+
+.star-tier-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--hint);
+}
+
+.crypto-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.crypto-row {
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.crypto-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-bottom: var(--s-1);
+}
+
+.crypto-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.crypto-ticker {
+  color: var(--hint);
+  font-size: 13px;
+}
+
+.crypto-addr-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.crypto-addr {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  word-break: break-all;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+/* ----------------------------------------------------------------------------
+   Feedback + Paste sheets
+---------------------------------------------------------------------------- */
+.sheet-title {
+  margin: 0 0 var(--s-2);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.feedback-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: var(--s-2) 0;
+}
+
+.feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  text-decoration: none;
+}
+
+.feedback-email-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) 0;
+}
+
+.feedback-email {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-all;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.paste-input {
+  display: block;
+  width: 100%;
+  resize: none;
+  margin: var(--s-2) 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--separator);
+  border-radius: var(--r-btn);
+  padding: var(--s-2);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-all;
 }

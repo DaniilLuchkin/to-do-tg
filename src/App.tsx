@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Editor from './Editor'
 import NotesList from './NotesList'
 import Help from './Help'
+import Donate from './Donate'
 import {
   initNotes,
   saveIndex,
@@ -18,7 +19,7 @@ import {
 } from './storage'
 import { parseSharedNote, readStartParam } from './share'
 
-type View = 'list' | 'editor' | 'help'
+type View = 'list' | 'editor' | 'help' | 'donate'
 
 export default function App() {
   const [notes, setNotes] = useState<NoteMeta[]>([])
@@ -106,6 +107,11 @@ export default function App() {
 
   const openHelp = useCallback(() => setView('help'), [])
   const closeHelp = useCallback(() => setView('list'), [])
+  const openDonate = useCallback(() => setView('donate'), [])
+  const closeDonate = useCallback(() => setView('list'), [])
+
+  // A note received via the "Paste shared note" menu → reuse the save prompt.
+  const onReceiveShared = useCallback((rows: Row[]) => setIncoming(rows), [])
 
   const onTitleChange = useCallback((id: string, title: string) => {
     if (!hydrated.current) return
@@ -203,6 +209,10 @@ export default function App() {
     return <Help onClose={closeHelp} />
   }
 
+  if (view === 'donate') {
+    return <Donate onClose={closeDonate} />
+  }
+
   if (view === 'editor' && currentId) {
     return (
       <Editor
@@ -225,6 +235,8 @@ export default function App() {
         onDelete={deleteNote}
         onReorder={reorderNotes}
         onHelp={openHelp}
+        onDonate={openDonate}
+        onReceiveShared={onReceiveShared}
         onNotesReplaced={onNotesReplaced}
       />
 

@@ -8,6 +8,8 @@ import {
 } from 'react'
 import IconButton from './IconButton'
 import Icon from './Icon'
+import Feedback from './Feedback'
+import PasteShared from './PasteShared'
 import {
   exportAllNotes,
   importAllNotes,
@@ -15,12 +17,10 @@ import {
   SCHEMA_VERSION,
   MAX_NOTES,
   type NoteMeta,
+  type Row,
 } from './storage'
 
 const SWIPE_DELETE_PX = 120
-
-// TODO: fill in with the real Telegram Stars invoice / donation link.
-const DONATE_URL = ''
 
 function hapticLight(): void {
   window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light')
@@ -57,6 +57,8 @@ type NotesListProps = {
   onDelete: (id: string) => void
   onReorder: (notes: NoteMeta[]) => void
   onHelp: () => void
+  onDonate: () => void
+  onReceiveShared: (rows: Row[]) => void
   onNotesReplaced: (notes: NoteMeta[]) => void
 }
 
@@ -69,11 +71,15 @@ export default function NotesList({
   onDelete,
   onReorder,
   onHelp,
+  onDonate,
+  onReceiveShared,
   onNotesReplaced,
 }: NotesListProps) {
   const [reorderMode, setReorderMode] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [pasteOpen, setPasteOpen] = useState(false)
   const [pendingImport, setPendingImport] = useState<string | null>(null)
   const [importNotice, setImportNotice] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -176,15 +182,28 @@ export default function NotesList({
     window.Telegram?.WebApp?.addToHomeScreen?.()
   }, [closeMenu])
 
-  const onDonate = useCallback(() => {
+  const openDonate = useCallback(() => {
     closeMenu()
-    if (DONATE_URL) {
-      window.open(DONATE_URL, '_blank')
-    } else {
-      // No invoice wired yet — point to the support note in Help.
-      onHelp()
-    }
-  }, [closeMenu, onHelp])
+    onDonate()
+  }, [closeMenu, onDonate])
+
+  const openFeedback = useCallback(() => {
+    closeMenu()
+    setFeedbackOpen(true)
+  }, [closeMenu])
+
+  const openPaste = useCallback(() => {
+    closeMenu()
+    setPasteOpen(true)
+  }, [closeMenu])
+
+  const onPasteReceived = useCallback(
+    (rows: Row[]) => {
+      setPasteOpen(false)
+      onReceiveShared(rows)
+    },
+    [onReceiveShared]
+  )
 
   // Vertical swipes stay globally locked (Wallet-style); reorder never undoes
   // the lock, so toggling reorder mode just reasserts the disabled state.
@@ -529,11 +548,17 @@ export default function NotesList({
                 to home screen” may not be available on every device.
               </p>
             )}
-            <button type="button" className="menu-row" onClick={onDonate}>
+            <button type="button" className="menu-row" onClick={openDonate}>
               <span className="menu-icon">
                 <Icon name="heart" size={20} />
               </span>
               <span className="menu-label">Donate</span>
+            </button>
+            <button type="button" className="menu-row" onClick={openFeedback}>
+              <span className="menu-icon">
+                <Icon name="message" size={20} />
+              </span>
+              <span className="menu-label">Send feedback</span>
             </button>
             <button
               type="button"
@@ -559,6 +584,12 @@ export default function NotesList({
                 <Icon name="upload" size={20} />
               </span>
               <span className="menu-label">Import all notes</span>
+            </button>
+            <button type="button" className="menu-row" onClick={openPaste}>
+              <span className="menu-icon">
+                <Icon name="clipboard" size={20} />
+              </span>
+              <span className="menu-label">Paste shared note</span>
             </button>
             <button type="button" className="menu-row" onClick={onAddHome}>
               <span className="menu-icon">
@@ -603,6 +634,15 @@ export default function NotesList({
             </div>
           </div>
         </>
+      )}
+
+      {feedbackOpen && <Feedback onClose={() => setFeedbackOpen(false)} />}
+
+      {pasteOpen && (
+        <PasteShared
+          onClose={() => setPasteOpen(false)}
+          onReceived={onPasteReceived}
+        />
       )}
 
       <ul className={`list${reorderMode ? ' reorder' : ''}`} ref={listRef}>
