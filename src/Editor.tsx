@@ -20,9 +20,13 @@ import {
   type Row,
 } from './storage'
 import { shareNote } from './share'
-
-// When Telegram's BackButton exists, rely on it (no duplicate in-app back).
-const HAS_BACK_BUTTON = !!window.Telegram?.WebApp?.BackButton
+import {
+  HAS_BACK_BUTTON,
+  hapticLight,
+  hapticMedium,
+  beginDragLock,
+  endDragLock,
+} from './telegram-ui'
 
 // Per-note byte cap.
 const MAX_VALUE_LENGTH = MAX_VALUE_BYTES
@@ -51,28 +55,6 @@ function createRow(checkbox = false, level: 0 | 1 = 0): Row {
 function autoGrow(el: HTMLTextAreaElement): void {
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
-}
-
-// Haptic ticks — only inside Telegram.
-function hapticLight(): void {
-  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light')
-}
-
-function hapticMedium(): void {
-  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium')
-}
-
-// Suspend Telegram's vertical swipe-to-minimize during a drag (guarded).
-function beginDragLock(): void {
-  window.Telegram?.WebApp?.disableVerticalSwipes?.()
-  document.body.style.touchAction = 'none'
-}
-
-// Vertical swipes are globally locked (Wallet-style); a drag never re-enables
-// them — restore the locked (disabled) state when the drag ends.
-function endDragLock(): void {
-  document.body.style.touchAction = ''
-  window.Telegram?.WebApp?.disableVerticalSwipes?.()
 }
 
 type Gesture = {
