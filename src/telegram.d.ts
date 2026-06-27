@@ -60,6 +60,7 @@ interface TelegramWebApp {
   disableVerticalSwipes?(): void
   enableVerticalSwipes?(): void
   addToHomeScreen?(): void
+  openInvoice?(url: string, callback?: (status: string) => void): void
 }
 
 interface Window {

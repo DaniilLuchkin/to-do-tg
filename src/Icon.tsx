@@ -17,6 +17,10 @@ export type IconName =
   | 'chevron-left'
   | 'close'
   | 'share'
+  | 'star'
+  | 'mail'
+  | 'message'
+  | 'clipboard'
 
 type IconProps = {
   name: IconName
@@ -157,6 +161,34 @@ export default function Icon({ name, size = 22 }: IconProps) {
           <circle cx="18" cy="19" r="3" />
           <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
           <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+        </svg>
+      )
+    case 'star':
+      return (
+        <svg {...common}>
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      )
+    case 'mail':
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <polyline points="3 7 12 13 21 7" />
+        </svg>
+      )
+    case 'message':
+      return (
+        <svg {...common}>
+          <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5a8.38 8.38 0 0 1-.9-4A8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z" />
+        </svg>
+      )
+    case 'clipboard':
+      return (
+        <svg {...common}>
+          <rect x="5" y="4" width="14" height="17" rx="2" />
+          <path d="M9 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9z" />
+          <line x1="8.5" y1="11" x2="15.5" y2="11" />
+          <line x1="8.5" y1="15" x2="13.5" y2="15" />
         </svg>
       )
   }
