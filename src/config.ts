@@ -15,9 +15,9 @@ export type AppConfig = {
 export const CONFIG: AppConfig = {
   // Telegram Stars donation tiers. Empty link = tier hidden (links added later).
   donateStars: [
-    { label: 'Coffee', stars: 50, link: '' },
-    { label: 'Support', stars: 150, link: '' },
-    { label: 'Generous', stars: 500, link: '' },
+    { label: 'Coffee', stars: 50, link: 'https://t.me/$5dLqUUG-AUopFwAAe41XLnj9KJU' },
+    { label: 'Support', stars: 150, link: 'https://t.me/$ihKGVkG-AUorFwAAeuY0_KaBsX4' },
+    { label: 'Generous', stars: 500, link: 'https://t.me/$sg3770G-AUosFwAAHMSSS0eiulQ' },
   ],
   // Crypto donation addresses (grouped by network; network shown in `name`).
   crypto: [
