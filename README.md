@@ -45,6 +45,16 @@ the native Telegram header. (No-ops in a plain browser / on older clients.)
 - **Reorder rows:** on desktop, hover a line and drag its **⠿** handle; on mobile, tap the **reorder** button to enter reorder mode (handles appear, editing pauses), then drag lines; tap again to exit. Each line keeps its own indent. Dragging suspends Telegram's vertical swipe-to-minimize, so the app won't collapse while you reorder.
 - Each note is stored as one compact value, capped at **4096 bytes** (Telegram CloudStorage's per-value limit). The **`used/4096 B` counter** shows the UTF-8 bytes used (and emphasizes when nearly full). **Typing stops at the limit:** once full, keystrokes/pastes and other growing edits are blocked and a **"Storage full — delete or shorten a line."** notice appears; deleting or shortening always works so you can recover.
 
+## Privacy & Security
+
+- **Where your data lives:** notes are saved in **Telegram CloudStorage**, tied to your Telegram account and isolated per bot — i.e. scoped to *(this bot × your account)*. Other users can't read your notes.
+- **No backend:** there is no server, database, or analytics. The app runs entirely in your Telegram client; it doesn't collect or transmit your notes, and nothing passes through the developer.
+- **Not end-to-end encrypted:** Telegram CloudStorage is **not** E2E encrypted. As with regular (non-secret) chats, Telegram the company can technically access its contents. **Please don't store passwords, secrets, or highly sensitive personal data here.**
+- **Account & device dependent:** your notes are only as safe as your Telegram account and your unlocked device. The app has no separate login or app-lock, so enabling **Two-Step Verification (2FA)** on Telegram and keeping your device locked are what protect them.
+- **Sharing is public by design:** sharing a note sends its content as an ordinary Telegram message or link. Once shared it's no longer private and deliberately leaves the per-user isolation.
+- **Local backups are plaintext:** "Export all notes" produces a plain JSON file saved to your device in the clear. From that point its safety depends on your device and any cloud you sync it to — not Telegram.
+- **Open source:** the code is open for anyone to review, and you can self-host your own copy.
+
 ## Develop & build
 
 ```bash
