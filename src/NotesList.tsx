@@ -10,6 +10,7 @@ import IconButton from './IconButton'
 import Icon from './Icon'
 import Feedback from './Feedback'
 import PasteShared from './PasteShared'
+import { hapticLight, beginDragLock, endDragLock } from './telegram-ui'
 import {
   exportAllNotes,
   importAllNotes,
@@ -21,22 +22,6 @@ import {
 } from './storage'
 
 const SWIPE_DELETE_PX = 120
-
-function hapticLight(): void {
-  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light')
-}
-
-function beginDragLock(): void {
-  window.Telegram?.WebApp?.disableVerticalSwipes?.()
-  document.body.style.touchAction = 'none'
-}
-
-// Vertical swipes are globally locked (Wallet-style); a drag never re-enables
-// them — restore the locked (disabled) state when the drag ends.
-function endDragLock(): void {
-  document.body.style.touchAction = ''
-  window.Telegram?.WebApp?.disableVerticalSwipes?.()
-}
 
 type Gesture = {
   pointerId: number
@@ -597,7 +582,6 @@ export default function NotesList({
               </span>
               <span className="menu-label">Add to home screen</span>
             </button>
-            {/* TODO: future product links / sections go here. */}
             <div className="menu-row disabled" aria-disabled="true">
               <span className="menu-icon">
                 <Icon name="ellipsis" size={20} />

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import IconButton from './IconButton'
-
-const HAS_BACK_BUTTON = !!window.Telegram?.WebApp?.BackButton
+import { HAS_BACK_BUTTON } from './telegram-ui'
 
 type HelpProps = {
   onClose: () => void

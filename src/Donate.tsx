@@ -2,10 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Icon from './Icon'
 import IconButton from './IconButton'
 import { CONFIG, type DonateStarTier } from './config'
-
-// Rely on Telegram's BackButton when present; only render an in-app back in
-// the browser fallback.
-const HAS_BACK_BUTTON = !!window.Telegram?.WebApp?.BackButton
+import { HAS_BACK_BUTTON } from './telegram-ui'
 
 type DonateProps = {
   onClose: () => void
